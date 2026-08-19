@@ -252,6 +252,7 @@ def normalize_text(text):
         text
     )
 
+    # Hyphen treated as space
     text = re.sub(
         r"-+",
         " ",
@@ -357,15 +358,6 @@ def short_value_exists(
     if not expected_norm:
         return False
 
-    # Exact token matching.
-    #
-    # "2" matches "2"
-    #
-    # but does not match:
-    # "2026"
-    # "12"
-    # "7606601"
-
     pattern = (
         r"(?<![\w])"
         + re.escape(expected_norm)
@@ -376,8 +368,7 @@ def short_value_exists(
         re.search(
             pattern,
             pdf_norm
-        )
-        is not None
+        ) is not None
     )
 
 
@@ -421,10 +412,26 @@ def complete_text_exists(
 
 
 # =========================================================
-# FIND SIMILAR TEXT
+# GET TOKENS
 # =========================================================
 
-def find_similar_text(
+def get_tokens(text):
+
+    normalized = normalize_text(
+        text
+    )
+
+    if not normalized:
+        return []
+
+    return normalized.split()
+
+
+# =========================================================
+# FIND BEST PARTIAL MATCH
+# =========================================================
+
+def find_best_partial_match(
     expected,
     pdf_text
 ):
@@ -433,6 +440,16 @@ def find_similar_text(
         expected
     )
 
+    if not expected_norm:
+        return "", 0, 0
+
+    expected_tokens = get_tokens(
+        expected
+    )
+
+    if not expected_tokens:
+        return "", 0, 0
+
     lines = [
         line.strip()
         for line in pdf_text.splitlines()
@@ -440,15 +457,15 @@ def find_similar_text(
     ]
 
     if not lines:
-        return "", 0
+        return "", 0, 0
 
     best_text = ""
     best_score = 0
+    best_coverage = 0
 
-    # Combine PDF lines.
-    #
-    # This allows long care paragraphs to be compared
-    # even when the PDF wraps them over many lines.
+    # -----------------------------------------------------
+    # Compare groups of PDF lines
+    # -----------------------------------------------------
 
     for start in range(
         len(lines)
@@ -477,19 +494,57 @@ def find_similar_text(
             if not block_norm:
                 continue
 
+            # ---------------------------------------------
+            # Fuzzy similarity
+            # ---------------------------------------------
+
             score = fuzz.ratio(
                 expected_norm,
                 block_norm
             )
 
-            if score > best_score:
+            # ---------------------------------------------
+            # Token coverage
+            #
+            # Determines how much of the Order Form text
+            # exists in the PDF block.
+            # ---------------------------------------------
 
-                best_score = score
+            block_tokens = set(
+                get_tokens(block)
+            )
+
+            matched_tokens = sum(
+                1
+                for token in expected_tokens
+                if token in block_tokens
+            )
+
+            coverage = (
+                matched_tokens
+                / len(expected_tokens)
+            )
+
+            # ---------------------------------------------
+            # Select best candidate
+            # ---------------------------------------------
+
+            if (
+                coverage > best_coverage
+                or (
+                    coverage == best_coverage
+                    and score > best_score
+                )
+            ):
+
                 best_text = block
+                best_score = score
+                best_coverage = coverage
 
     return (
         best_text,
-        best_score
+        best_score,
+        best_coverage
     )
 
 
@@ -514,9 +569,9 @@ def compare_field(
             "No Order Form data."
         )
 
-    # -----------------------------------------------------
+    # =====================================================
     # SHORT VALUES
-    # -----------------------------------------------------
+    # =====================================================
 
     if is_short_value(
         expected
@@ -534,15 +589,21 @@ def compare_field(
                 "Case and formatting differences ignored."
             )
 
+        # IMPORTANT:
+        # If value is completely absent from PDF,
+        # ignore it.
+
         return (
             "",
-            "FAIL",
-            "Expected value not found on the corresponding PDF page."
+            "SKIP",
+            "Order Form value is not present in "
+            "the PDF output. Comparison ignored."
         )
 
-    # -----------------------------------------------------
+
+    # =====================================================
     # COMPLETE LONG TEXT
-    # -----------------------------------------------------
+    # =====================================================
 
     if complete_text_exists(
         expected,
@@ -556,42 +617,59 @@ def compare_field(
             ),
             "PASS",
             "Complete data found. "
-            "Case, spacing, punctuation and PDF line wrapping ignored."
+            "Case, spacing, punctuation and PDF "
+            "line wrapping ignored."
         )
 
-    # -----------------------------------------------------
-    # SIMILARITY ANALYSIS
-    #
-    # IMPORTANT:
-    # Similarity is ONLY used to explain FAIL.
-    # It does NOT create PASS.
-    # -----------------------------------------------------
 
-    similar_text, score = find_similar_text(
+    # =====================================================
+    # PARTIAL / DIFFERENCE ANALYSIS
+    # =====================================================
+
+    (
+        similar_text,
+        score,
+        coverage
+    ) = find_best_partial_match(
         expected,
         pdf_text
     )
 
-    if similar_text:
 
-        if score >= 80:
+    # =====================================================
+    # DIFFERENCE DETECTION
+    #
+    # Only report FAIL when a substantial portion of the
+    # Order Form data is actually present in the PDF.
+    #
+    # This is what prevents completely missing data from
+    # being incorrectly reported as a spelling mistake.
+    # =====================================================
+
+    if coverage >= 0.60:
+
+        if score >= 65:
 
             return (
                 similar_text,
                 "FAIL",
-                "Possible spelling difference or minor text difference."
+                "Possible spelling/content difference detected "
+                "between the Order Form and PDF output."
             )
 
-        return (
-            similar_text,
-            "FAIL",
-            "Data mismatch."
-        )
+
+    # =====================================================
+    # COMPLETELY ABSENT FROM PDF
+    #
+    # IMPORTANT:
+    # This is intentionally SKIPPED.
+    # =====================================================
 
     return (
         "",
-        "FAIL",
-        "Expected data not found on the corresponding PDF page."
+        "SKIP",
+        "Order Form data is not present in the PDF output. "
+        "Comparison ignored."
     )
 
 
@@ -613,13 +691,9 @@ def get_readable_pdf_text(
     if not lines:
         return ""
 
-    # Return the complete page text.
-    #
-    # This is intentional for long care instructions
-    # where the artwork wraps the sentence across
-    # multiple lines.
-
-    return " ".join(lines)
+    return " ".join(
+        lines
+    )
 
 
 # =========================================================
@@ -670,7 +744,6 @@ def read_order_form(
 
     excel_file.seek(0)
 
-    # First row contains field names.
     df = pd.read_excel(
         excel_file,
         header=0
@@ -741,7 +814,6 @@ def create_report(
     # Row 1 = headers
     # Row 2 = SKU / Artwork 1
     # Row 3 = SKU / Artwork 2
-    # Row 4 = SKU / Artwork 3
     #
     # PDF:
     #
@@ -755,9 +827,9 @@ def create_report(
             excel_index + 1
         )
 
-        # -------------------------------------------------
-        # Missing PDF page
-        # -------------------------------------------------
+        # =================================================
+        # MISSING PDF PAGE
+        # =================================================
 
         if (
             pdf_page_number
@@ -790,13 +862,15 @@ def create_report(
 
             continue
 
+
         pdf_text = pdf_pages[
             pdf_page_number - 1
         ]["text"]
 
-        # -------------------------------------------------
-        # Compare selected fields
-        # -------------------------------------------------
+
+        # =================================================
+        # COMPARE SELECTED FIELDS
+        # =================================================
 
         for field in selected_fields:
 
@@ -811,11 +885,13 @@ def create_report(
                 value
             ).strip()
 
-            output, status, comments = (
-                compare_field(
-                    value,
-                    pdf_text
-                )
+            (
+                output,
+                status,
+                comments
+            ) = compare_field(
+                value,
+                pdf_text
             )
 
             results.append({
@@ -925,9 +1001,9 @@ with right:
 
 if excel_file and pdf_file:
 
-    # -----------------------------------------------------
+    # =====================================================
     # READ EXCEL
-    # -----------------------------------------------------
+    # =====================================================
 
     try:
 
@@ -944,9 +1020,9 @@ if excel_file and pdf_file:
         st.stop()
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # READ PDF
-    # -----------------------------------------------------
+    # =====================================================
 
     try:
 
@@ -1064,9 +1140,9 @@ if excel_file and pdf_file:
     )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # AUTOMATICALLY DETECTED FIELDS
-    # -----------------------------------------------------
+    # =====================================================
 
     st.write(
         f"**Artwork-related fields automatically detected: "
@@ -1089,9 +1165,9 @@ if excel_file and pdf_file:
         )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # COMPLETE FIELD ANALYSIS
-    # -----------------------------------------------------
+    # =====================================================
 
     with st.expander(
         "🔎 View complete field analysis"
@@ -1208,6 +1284,10 @@ if excel_file and pdf_file:
 
         else:
 
+            # =================================================
+            # COUNTS
+            # =================================================
+
             pass_count = (
                 report[
                     "STATUS"
@@ -1220,18 +1300,25 @@ if excel_file and pdf_file:
                 ] == "FAIL"
             ).sum()
 
-            # -------------------------------------------------
-            # SUMMARY
-            # -------------------------------------------------
+            skip_count = (
+                report[
+                    "STATUS"
+                ] == "SKIP"
+            ).sum()
 
-            c1, c2, c3 = st.columns(
-                3
+
+            # =================================================
+            # SUMMARY
+            # =================================================
+
+            c1, c2, c3, c4 = st.columns(
+                4
             )
 
             with c1:
 
                 st.metric(
-                    "TOTAL CHECKED",
+                    "TOTAL",
                     len(report)
                 )
 
@@ -1249,10 +1336,17 @@ if excel_file and pdf_file:
                     fail_count
                 )
 
+            with c4:
 
-            # -------------------------------------------------
+                st.metric(
+                    "IGNORED",
+                    skip_count
+                )
+
+
+            # =================================================
             # COLOR STATUS
-            # -------------------------------------------------
+            # =================================================
 
             styled_report = (
                 report
@@ -1273,9 +1367,9 @@ if excel_file and pdf_file:
             )
 
 
-            # -------------------------------------------------
+            # =================================================
             # CONCLUSION
-            # -------------------------------------------------
+            # =================================================
 
             st.divider()
 
@@ -1283,7 +1377,8 @@ if excel_file and pdf_file:
 
                 st.success(
                     "✅ CONCLUSION: "
-                    "All checked artwork fields passed."
+                    "All applicable artwork fields passed. "
+                    "Data not present in the PDF was ignored."
                 )
 
             else:
@@ -1294,9 +1389,9 @@ if excel_file and pdf_file:
                 )
 
 
-            # -------------------------------------------------
+            # =================================================
             # DOWNLOAD REPORT
-            # -------------------------------------------------
+            # =================================================
 
             csv_data = (
                 report

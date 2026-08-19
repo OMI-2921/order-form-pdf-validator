@@ -11,7 +11,7 @@ from rapidfuzz import fuzz
 # =========================================================
 
 st.set_page_config(
-    page_title="Order Form → PDF Validator",
+    page_title="Order Form PDF Validator",
     page_icon="📋",
     layout="wide"
 )
@@ -24,19 +24,6 @@ st.caption(
 
 # =========================================================
 # SMART FIELD CONCEPTS
-# =========================================================
-#
-# The application does NOT require one exact field name.
-#
-# Example:
-#
-# French Care
-# French Instruction
-# French Washing Instruction
-# Care French
-#
-# can all be recognized as CARE-related fields.
-#
 # =========================================================
 
 FIELD_CONCEPTS = {
@@ -53,7 +40,7 @@ FIELD_CONCEPTS = {
         "washinstruction",
         "washinginstruction",
         "laundryinstruction",
-        "washingcare",
+        "washcare",
         "carelabel"
     ],
 
@@ -152,51 +139,36 @@ IGNORE_KEYWORDS = [
     "datetime",
     "date",
     "time",
-
     "quantity",
     "qty",
-
     "corporatecustomer",
-
     "vendorcompany",
     "vendor",
-
     "customerpo",
-
     "orderno",
     "ordernumber",
     "orderformnumber",
-
     "jobno",
     "jobnumber",
-
     "ticket",
-
     "userid",
     "username",
-
     "createdby",
     "modifiedby",
-
     "status",
-
     "internal",
-
     "database",
     "recordid",
     "systemid",
-
     "timestamp",
-
     "revision",
-
     "filelocation",
     "filepath"
 ]
 
 
 # =========================================================
-# HEADER NORMALIZATION
+# HEADER CLEANING
 # =========================================================
 
 def clean_header(header):
@@ -229,10 +201,7 @@ def classify_field(header):
 
     compact = clean_header(original)
 
-    # -----------------------------------------------------
-    # Internal fields take priority
-    # -----------------------------------------------------
-
+    # Internal fields first
     for keyword in IGNORE_KEYWORDS:
 
         keyword_clean = clean_header(keyword)
@@ -240,10 +209,7 @@ def classify_field(header):
         if keyword_clean and keyword_clean in compact:
             return "IGNORE"
 
-    # -----------------------------------------------------
-    # Artwork-related concepts
-    # -----------------------------------------------------
-
+    # Artwork-related fields
     for concept, keywords in FIELD_CONCEPTS.items():
 
         for keyword in keywords:
@@ -252,27 +218,6 @@ def classify_field(header):
 
             if keyword_clean and keyword_clean in compact:
                 return "CHECK"
-
-    # -----------------------------------------------------
-    # Language-aware care detection
-    # -----------------------------------------------------
-
-    if (
-        "english" in compact
-        or "french" in compact
-        or "canada" in compact
-    ):
-
-        care_words = FIELD_CONCEPTS["CARE"]
-
-        for keyword in care_words:
-
-            if clean_header(keyword) in compact:
-                return "CHECK"
-
-    # -----------------------------------------------------
-    # Unknown field
-    # -----------------------------------------------------
 
     return "REVIEW"
 
@@ -288,7 +233,6 @@ def normalize_text(text):
 
     text = str(text)
 
-    # Unicode normalization
     text = unicodedata.normalize(
         "NFKC",
         text
@@ -297,18 +241,17 @@ def normalize_text(text):
     # Case insensitive
     text = text.lower()
 
-    # PDF line breaks become spaces
+    # PDF line wrapping
     text = text.replace("\n", " ")
     text = text.replace("\r", " ")
 
-    # Common separators become spaces
+    # Separators do not matter
     text = re.sub(
         r"[,.;:|/\\]+",
         " ",
         text
     )
 
-    # Hyphenated formatting
     text = re.sub(
         r"-+",
         " ",
@@ -322,7 +265,7 @@ def normalize_text(text):
         text
     )
 
-    # Collapse multiple spaces
+    # Remove repeated spaces
     text = re.sub(
         r"\s+",
         " ",
@@ -343,7 +286,7 @@ def compact_normalize(text):
 
 
 # =========================================================
-# CHECK WHETHER VALUE IS EMPTY
+# EMPTY VALUE CHECK
 # =========================================================
 
 def is_empty_value(value):
@@ -352,9 +295,12 @@ def is_empty_value(value):
         return True
 
     try:
+
         if pd.isna(value):
             return True
+
     except Exception:
+
         pass
 
     return str(value).strip() == ""
@@ -375,17 +321,15 @@ def is_short_value(value):
 
     words = normalized.split()
 
-    # Short values such as:
-    #
-    # 0
+    # Examples:
+    # S
+    # M
+    # L
+    # XL
+    # XXL
     # 2
     # 4
-    # XXL
-    # M
-    # S
-    #
-    # should not be fuzzy matched against random
-    # numbers elsewhere on the page.
+    # 10
 
     if len(words) == 1 and len(normalized) <= 5:
         return True
@@ -417,12 +361,10 @@ def short_value_exists(
     #
     # "2" matches "2"
     #
-    # but does NOT match:
-    #
-    # "7606601"
+    # but does not match:
     # "2026"
     # "12"
-    #
+    # "7606601"
 
     pattern = (
         r"(?<![\w])"
@@ -459,19 +401,11 @@ def complete_text_exists(
     if not expected_norm:
         return False
 
-    # -----------------------------------------------------
     # Normal comparison
-    # -----------------------------------------------------
-
     if expected_norm in pdf_norm:
         return True
 
-    # -----------------------------------------------------
-    # Compact comparison
-    #
-    # Handles additional spaces/line wrapping.
-    # -----------------------------------------------------
-
+    # Comparison ignoring spaces
     expected_compact = compact_normalize(
         expected
     )
@@ -487,7 +421,7 @@ def complete_text_exists(
 
 
 # =========================================================
-# FIND SIMILAR PDF TEXT
+# FIND SIMILAR TEXT
 # =========================================================
 
 def find_similar_text(
@@ -511,16 +445,10 @@ def find_similar_text(
     best_text = ""
     best_score = 0
 
-    # Combine multiple PDF lines.
+    # Combine PDF lines.
     #
-    # This is important for:
-    #
-    # MACHINE WASH COLD WITH LIKE
-    # COLORS. CHLORINE BLEACH WHEN
-    # NEEDED. TUMBLE DRY LOW.
-    #
-    # The system can analyze the entire paragraph
-    # instead of just one line.
+    # This allows long care paragraphs to be compared
+    # even when the PDF wraps them over many lines.
 
     for start in range(
         len(lines)
@@ -634,9 +562,9 @@ def compare_field(
     # -----------------------------------------------------
     # SIMILARITY ANALYSIS
     #
-    # Used only to explain a FAIL.
-    #
-    # It NEVER converts a fuzzy match into PASS.
+    # IMPORTANT:
+    # Similarity is ONLY used to explain FAIL.
+    # It does NOT create PASS.
     # -----------------------------------------------------
 
     similar_text, score = find_similar_text(
@@ -668,7 +596,7 @@ def compare_field(
 
 
 # =========================================================
-# GET READABLE PDF TEXT
+# READABLE PDF OUTPUT
 # =========================================================
 
 def get_readable_pdf_text(
@@ -685,36 +613,55 @@ def get_readable_pdf_text(
     if not lines:
         return ""
 
-    expected_norm = normalize_text(
-        expected
-    )
-
-    # -----------------------------------------------------
-    # If the complete content is contained in one
-    # page, return the page's readable text.
+    # Return the complete page text.
     #
-    # This is useful for long care instructions because
-    # the user can see the complete paragraph rather than
-    # only the first wrapped line.
-    # -----------------------------------------------------
+    # This is intentional for long care instructions
+    # where the artwork wraps the sentence across
+    # multiple lines.
 
-    page_text = " ".join(
-        lines
-    )
-
-    page_norm = normalize_text(
-        page_text
-    )
-
-    if expected_norm in page_norm:
-
-        return page_text
-
-    return page_text
+    return " ".join(lines)
 
 
 # =========================================================
-# READ EXCEL
+# PDF EXTRACTION
+# =========================================================
+
+def extract_pdf_pages(
+    pdf_file
+):
+
+    pdf_file.seek(0)
+
+    pdf_bytes = pdf_file.read()
+
+    document = fitz.open(
+        stream=pdf_bytes,
+        filetype="pdf"
+    )
+
+    pages = []
+
+    for page_number, page in enumerate(
+        document,
+        start=1
+    ):
+
+        text = page.get_text()
+
+        pages.append({
+
+            "page": page_number,
+
+            "text": text
+        })
+
+    document.close()
+
+    return pages
+
+
+# =========================================================
+# READ ORDER FORM
 # =========================================================
 
 def read_order_form(
@@ -723,7 +670,7 @@ def read_order_form(
 
     excel_file.seek(0)
 
-    # Row 1 of the Flat File is treated as the header.
+    # First row contains field names.
     df = pd.read_excel(
         excel_file,
         header=0
@@ -733,7 +680,7 @@ def read_order_form(
 
 
 # =========================================================
-# ANALYZE ALL HEADERS
+# ANALYZE HEADERS
 # =========================================================
 
 def analyze_headers(
@@ -778,7 +725,7 @@ def analyze_headers(
 
 
 # =========================================================
-# BUILD COMPARISON REPORT
+# CREATE REPORT
 # =========================================================
 
 def create_report(
@@ -789,15 +736,18 @@ def create_report(
 
     results = []
 
-    # -----------------------------------------------------
-    # IMPORTANT:
+    # Excel:
     #
-    # Excel row 2 → PDF page 1
-    # Excel row 3 → PDF page 2
-    # Excel row 4 → PDF page 3
+    # Row 1 = headers
+    # Row 2 = SKU / Artwork 1
+    # Row 3 = SKU / Artwork 2
+    # Row 4 = SKU / Artwork 3
     #
-    # pandas row index 0 = Excel row 2
-    # -----------------------------------------------------
+    # PDF:
+    #
+    # Page 1 = Row 2
+    # Page 2 = Row 3
+    # Page 3 = Row 4
 
     for excel_index, row in df.iterrows():
 
@@ -806,7 +756,7 @@ def create_report(
         )
 
         # -------------------------------------------------
-        # No corresponding PDF page
+        # Missing PDF page
         # -------------------------------------------------
 
         if (
@@ -845,7 +795,7 @@ def create_report(
         ]["text"]
 
         # -------------------------------------------------
-        # Compare each selected artwork field
+        # Compare selected fields
         # -------------------------------------------------
 
         for field in selected_fields:
@@ -933,7 +883,7 @@ def color_status(
 
 
 # =========================================================
-# FILE UPLOAD AREA
+# UPLOAD AREA
 # =========================================================
 
 left, right = st.columns(
@@ -970,7 +920,7 @@ with right:
 
 
 # =========================================================
-# MAIN APPLICATION
+# APPLICATION
 # =========================================================
 
 if excel_file and pdf_file:
@@ -1007,15 +957,15 @@ if excel_file and pdf_file:
     except Exception as error:
 
         st.error(
-            f"Unable to read the PDF file: {error}"
+            f"Unable to read the PDF: {error}"
         )
 
         st.stop()
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # FILE INFORMATION
-    # -----------------------------------------------------
+    # =====================================================
 
     st.divider()
 
@@ -1023,25 +973,25 @@ if excel_file and pdf_file:
         "📌 File Information"
     )
 
-    col1, col2, col3 = st.columns(
+    c1, c2, c3 = st.columns(
         3
     )
 
-    with col1:
+    with c1:
 
         st.metric(
             "Excel Data Rows",
             len(df)
         )
 
-    with col2:
+    with c2:
 
         st.metric(
             "PDF Pages",
             len(pdf_pages)
         )
 
-    with col3:
+    with c3:
 
         difference = (
             len(df)
@@ -1054,17 +1004,12 @@ if excel_file and pdf_file:
         )
 
 
-    # -----------------------------------------------------
-    # ROW / PAGE WARNING
-    # -----------------------------------------------------
-
     if len(df) != len(pdf_pages):
 
         st.warning(
-            "⚠️ The number of Excel data rows and PDF pages "
-            "does not match. The application will still "
-            "compare available Row → Page pairs, but please "
-            "verify the PDF/page structure."
+            "⚠️ Excel data rows and PDF pages do not "
+            "have the same count. The available Row → "
+            "Page pairs will still be checked."
         )
 
     else:
@@ -1120,7 +1065,7 @@ if excel_file and pdf_file:
 
 
     # -----------------------------------------------------
-    # DETECTED FIELDS
+    # AUTOMATICALLY DETECTED FIELDS
     # -----------------------------------------------------
 
     st.write(
@@ -1145,7 +1090,7 @@ if excel_file and pdf_file:
 
 
     # -----------------------------------------------------
-    # FIELD ANALYSIS TABLE
+    # COMPLETE FIELD ANALYSIS
     # -----------------------------------------------------
 
     with st.expander(
@@ -1160,7 +1105,7 @@ if excel_file and pdf_file:
 
 
     # =====================================================
-    # UNKNOWN FIELDS
+    # REVIEW UNKNOWN FIELDS
     # =====================================================
 
     if review_fields:
@@ -1172,9 +1117,8 @@ if excel_file and pdf_file:
         ):
 
             st.write(
-                "These fields could not be confidently "
-                "classified. Select any that should be "
-                "checked against the artwork."
+                "These fields were not confidently classified. "
+                "Select any fields that should also be checked."
             )
 
             additional_fields = st.multiselect(
@@ -1192,7 +1136,7 @@ if excel_file and pdf_file:
 
 
     # =====================================================
-    # EXCLUDED FIELDS
+    # IGNORED FIELDS
     # =====================================================
 
     with st.expander(
@@ -1213,7 +1157,7 @@ if excel_file and pdf_file:
 
 
     # =====================================================
-    # COMPARE BUTTON
+    # COMPARE
     # =====================================================
 
     st.divider()
@@ -1276,13 +1220,6 @@ if excel_file and pdf_file:
                 ] == "FAIL"
             ).sum()
 
-            skip_count = (
-                report[
-                    "STATUS"
-                ] == "SKIP"
-            ).sum()
-
-
             # -------------------------------------------------
             # SUMMARY
             # -------------------------------------------------
@@ -1314,7 +1251,7 @@ if excel_file and pdf_file:
 
 
             # -------------------------------------------------
-            # COLORED REPORT
+            # COLOR STATUS
             # -------------------------------------------------
 
             styled_report = (
@@ -1353,13 +1290,12 @@ if excel_file and pdf_file:
 
                 st.error(
                     f"❌ CONCLUSION: "
-                    f"{fail_count} field(s) "
-                    f"require review."
+                    f"{fail_count} field(s) require review."
                 )
 
 
             # -------------------------------------------------
-            # DOWNLOAD CSV
+            # DOWNLOAD REPORT
             # -------------------------------------------------
 
             csv_data = (

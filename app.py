@@ -1995,15 +1995,16 @@ st.markdown(
 product_type = st.selectbox(
     "Select Product Type",
     options=[
+        "----- SELECT -----",
         "PFL",
         "HTL",
         "Other"
     ],
-    index=2,
+    index=0,
     help=(
         "PFL = panelled artwork where variable data can continue "
-        "from one panel to another. HTL and Other use the normal "
-        "continuous-data comparison."
+        "across panels. HTL / Other = standard continuous-data "
+        "comparison."
     )
 )
 

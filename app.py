@@ -8,335 +8,58 @@ from rapidfuzz import fuzz
 
 
 # =========================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # =========================================================
 
 st.set_page_config(
-    page_title="Order Form PDF Validator",
+    page_title="Order Form → PDF Proofreader",
     page_icon="📋",
     layout="wide"
 )
 
-st.title("📋 Order Form → PDF Validator")
+st.title("📋 Order Form → PDF Proofreader")
 st.caption(
-    "Order Form is treated as the master reference. "
-    "The PDF artwork is proofread against it."
+    "PDF artwork is the driver. The Order Form is used as the master reference."
 )
 
 
 # =========================================================
-# FIELD CONCEPTS
-# =========================================================
-#
-# These are used mainly for identifying the type/language
-# of a field. The actual comparison is based on the CELL
-# DATA itself.
-#
-# Example:
-#
-# French Care
-# French Instruction
-#
-# are both understood as French care-related fields.
+# SETTINGS
 # =========================================================
 
-FIELD_CONCEPTS = {
-
-    "CARE": [
-        "care",
-        "instruction",
-        "instructions",
-        "washing",
-        "wash",
-        "laundry",
-        "careinstruction",
-        "careinstructions",
-        "washinstruction",
-        "washinginstruction",
-        "laundryinstruction",
-        "washcare",
-        "carelabel"
-    ],
-
-    "CONTENT": [
-        "content",
-        "fabric",
-        "fiber",
-        "fibre",
-        "material",
-        "composition",
-        "fabriccontent",
-        "fibercontent",
-        "fibrecontent",
-        "materialcomposition",
-        "fabrication"
-    ],
-
-    "COO": [
-        "coo",
-        "country",
-        "origin",
-        "madein",
-        "countryoforigin",
-        "countryorigin",
-        "countryofmanufacture"
-    ],
-
-    "SIZE": [
-        "size",
-        "sizeline",
-        "sizelines",
-        "osz",
-        "fit",
-        "alpha",
-        "alphasize",
-        "waist",
-        "inseam",
-        "sizecode",
-        "sizemodifier"
-    ],
-
-    "ATTRIBUTE": [
-        "attribute",
-        "attributes",
-        "technology",
-        "technologyanddesign",
-        "technologyanddesignattributes",
-        "design",
-        "feature",
-        "features",
-        "description",
-        "productdescription",
-        "finish"
-    ],
-
-    "RN": [
-        "rn",
-        "registration",
-        "registrationnumber",
-        "companyrn"
-    ],
-
-    "BRAND": [
-        "brand",
-        "brandname",
-        "logo"
-    ],
-
-    "STYLE": [
-        "style",
-        "stylenumber",
-        "stylecode",
-        "styleid"
-    ],
-
-    "COLOR": [
-        "color",
-        "colour",
-        "colorname",
-        "colourname"
-    ],
-
-    "GENDER": [
-        "gender",
-        "productgender"
-    ]
-}
-
-
-# =========================================================
-# FIELDS THAT SHOULD GENERALLY NOT BE CHECKED
-# =========================================================
-
-IGNORE_KEYWORDS = [
-
-    "datetime",
-    "date",
-    "time",
-
-    "quantity",
-    "qty",
-
-    "corporatecustomer",
-
-    "vendorcompany",
-    "vendor",
-
-    "customerpo",
-
-    "orderno",
-    "ordernumber",
-    "orderformnumber",
-
-    "jobno",
-    "jobnumber",
-
-    "ticket",
-
-    "userid",
-    "username",
-
-    "createdby",
-    "modifiedby",
-
-    "status",
-
-    "internal",
-
-    "database",
-    "recordid",
-    "systemid",
-
-    "timestamp",
-
-    "revision",
-
-    "filelocation",
-    "filepath"
-]
-
-
-# =========================================================
-# HEADER NORMALIZATION
-# =========================================================
-
-def clean_header(value):
-
-    if value is None:
-        return ""
-
-    text = str(value).strip().lower()
-
-    return re.sub(
-        r"[^a-z0-9]",
-        "",
-        text
-    )
-
-
-# =========================================================
-# FIELD CLASSIFICATION
-# =========================================================
-
-def classify_field(header):
-
-    if header is None:
-        return "IGNORE"
-
-    header_text = str(header).strip()
-
-    if not header_text:
-        return "IGNORE"
-
-    compact = clean_header(
-        header_text
-    )
-
-    # Internal fields first
-    for keyword in IGNORE_KEYWORDS:
-
-        keyword_clean = clean_header(
-            keyword
-        )
-
-        if (
-            keyword_clean
-            and keyword_clean in compact
-        ):
-            return "IGNORE"
-
-    # Artwork-related fields
-    for concept, keywords in FIELD_CONCEPTS.items():
-
-        for keyword in keywords:
-
-            keyword_clean = clean_header(
-                keyword
-            )
-
-            if (
-                keyword_clean
-                and keyword_clean in compact
-            ):
-                return "CHECK"
-
-    return "REVIEW"
-
-
-# =========================================================
-# FIELD CONCEPT
-# =========================================================
-
-def get_field_concept(header):
-
-    compact = clean_header(
-        header
-    )
-
-    for concept, keywords in FIELD_CONCEPTS.items():
-
-        for keyword in keywords:
-
-            keyword_clean = clean_header(
-                keyword
-            )
-
-            if (
-                keyword_clean
-                and keyword_clean in compact
-            ):
-                return concept
-
-    return "UNKNOWN"
-
-
-# =========================================================
-# LANGUAGE DETECTION
-# =========================================================
-
-def get_field_language(header):
-
-    compact = clean_header(
-        header
-    )
-
-    if "french" in compact:
-        return "FRENCH"
-
-    if "francais" in compact:
-        return "FRENCH"
-
-    if "english" in compact:
-        return "ENGLISH"
-
-    if "anglais" in compact:
-        return "ENGLISH"
-
-    return "UNKNOWN"
+# Very short PDF strings such as "0", "2", "S", "M"
+# require much stronger matching.
+SHORT_TEXT_MIN_LENGTH = 3
+
+# Minimum confidence before we call something a
+# proofreading mismatch.
+MIN_MISMATCH_SCORE = 72
+
+# Minimum percentage of PDF words that should be found
+# in the Order Form reference.
+MIN_SHARED_WORDS = 0.45
 
 
 # =========================================================
 # TEXT NORMALIZATION
 # =========================================================
-#
-# This is used for the actual proofreading comparison.
-#
-# Example:
-#
-# ORDER FORM:
-# WARM WASH ONLY.
-#
-# PDF:
-# Warm   Wash
-# Only
-#
-# becomes:
-#
-# warm wash only
-#
-# =========================================================
 
 def normalize_text(text):
+    """
+    Normalize text while preserving the actual words.
+
+    Differences ignored:
+    - uppercase/lowercase
+    - line breaks
+    - multiple spaces
+    - comma
+    - full stop
+    - colon
+    - semicolon
+    - slash
+    - hyphen formatting
+    - apostrophe formatting
+    """
 
     if text is None:
         return ""
@@ -348,54 +71,43 @@ def normalize_text(text):
         text
     )
 
-    # Case insensitive
     text = text.lower()
 
-    # Normalize apostrophes
-    text = text.replace(
-        "’",
-        "'"
-    )
+    text = text.replace("’", "'")
+    text = text.replace("`", "'")
 
-    # PDF line breaks become spaces
-    text = text.replace(
-        "\n",
-        " "
-    )
+    # PDF line wrapping
+    text = text.replace("\n", " ")
+    text = text.replace("\r", " ")
 
-    text = text.replace(
-        "\r",
-        " "
-    )
-
-    # Separators are not important
+    # Treat punctuation/separators as spaces
     text = re.sub(
         r"[,.;:|/\\]+",
         " ",
         text
     )
 
-    # Hyphen handling
+    # Hyphen can be formatting
     text = re.sub(
         r"-+",
         " ",
         text
     )
 
-    # Keep letters, numbers, %, # and spaces
+    # Keep letters/numbers/%/#/apostrophe
     text = re.sub(
-        r"[^\w%#\s']",
+        r"[^\w%#'\s]",
         " ",
         text
     )
 
-    # Remove apostrophes for matching
+    # Apostrophe formatting should not cause failure
     text = text.replace(
         "'",
         ""
     )
 
-    # Collapse spaces
+    # Collapse whitespace
     text = re.sub(
         r"\s+",
         " ",
@@ -405,190 +117,161 @@ def normalize_text(text):
     return text.strip()
 
 
-# =========================================================
-# TOKENIZATION
-# =========================================================
-
-def tokenize(text):
-
-    normalized = normalize_text(
-        text
-    )
-
-    if not normalized:
-        return []
-
-    return normalized.split()
-
-
-# =========================================================
-# COMPACT NORMALIZATION
-# =========================================================
-
-def compact_normalize(text):
-
-    return normalize_text(
-        text
-    ).replace(
+def compact_text(text):
+    return normalize_text(text).replace(
         " ",
         ""
     )
 
 
-# =========================================================
-# EMPTY VALUE
-# =========================================================
+def tokenize(text):
+    value = normalize_text(text)
 
-def is_empty_value(value):
+    if not value:
+        return []
 
+    return value.split()
+
+
+def is_empty(value):
     if value is None:
         return True
 
     try:
-
         if pd.isna(value):
             return True
-
     except Exception:
-
         pass
 
-    return str(
-        value
-    ).strip() == ""
+    return str(value).strip() == ""
 
 
 # =========================================================
-# SHORT VALUE
+# EXCEL HEADER NORMALIZATION
 # =========================================================
 
-def is_short_value(value):
+def clean_header(value):
+    if value is None:
+        return ""
 
-    tokens = tokenize(
-        value
+    return re.sub(
+        r"[^a-z0-9]",
+        "",
+        str(value).lower()
     )
 
-    if not tokens:
+
+# =========================================================
+# FIELDS THAT ARE GENERALLY NOT ARTWORK CONTENT
+# =========================================================
+
+IGNORE_HEADERS = [
+    "date",
+    "time",
+    "datetime",
+    "quantity",
+    "qty",
+    "jobno",
+    "jobnumber",
+    "orderno",
+    "ordernumber",
+    "customerpo",
+    "ticket",
+    "userid",
+    "username",
+    "createdby",
+    "modifiedby",
+    "timestamp",
+    "recordid",
+    "systemid",
+    "filepath",
+    "filelocation",
+    "internal",
+    "status"
+]
+
+
+def should_ignore_header(header):
+    h = clean_header(header)
+
+    if not h:
         return True
 
-    normalized = normalize_text(
-        value
+    for item in IGNORE_HEADERS:
+        if item in h:
+            return True
+
+    return False
+
+
+# =========================================================
+# PDF TEXT EXTRACTION
+# =========================================================
+
+def extract_pdf_pages(pdf_file):
+
+    pdf_file.seek(0)
+
+    data = pdf_file.read()
+
+    doc = fitz.open(
+        stream=data,
+        filetype="pdf"
     )
 
-    # Single short values such as:
-    #
-    # S
-    # M
-    # L
-    # XL
-    # XXL
-    #
-    # should use exact token matching.
+    pages = []
 
-    if (
-        len(tokens) == 1
-        and len(normalized) <= 5
+    for page_index, page in enumerate(
+        doc
     ):
-        return True
 
-    return False
-
-
-# =========================================================
-# EXACT TOKEN SEARCH
-# =========================================================
-
-def exact_token_exists(
-    expected,
-    pdf_text
-):
-
-    expected_norm = normalize_text(
-        expected
-    )
-
-    pdf_norm = normalize_text(
-        pdf_text
-    )
-
-    if not expected_norm:
-        return False
-
-    pattern = (
-        r"(?<![\w])"
-        + re.escape(expected_norm)
-        + r"(?![\w])"
-    )
-
-    return (
-        re.search(
-            pattern,
-            pdf_norm
+        # IMPORTANT:
+        # Extract actual page text.
+        #
+        # We do not use PDF filename or metadata.
+        #
+        text = page.get_text(
+            "text"
         )
-        is not None
-    )
+
+        pages.append({
+            "page_number": page_index + 1,
+            "text": text
+        })
+
+    doc.close()
+
+    return pages
 
 
 # =========================================================
-# EXACT NORMALIZED SEARCH
-# =========================================================
-
-def exact_normalized_exists(
-    expected,
-    pdf_text
-):
-
-    expected_norm = normalize_text(
-        expected
-    )
-
-    pdf_norm = normalize_text(
-        pdf_text
-    )
-
-    if not expected_norm:
-        return False
-
-    # Direct normalized match
-    if expected_norm in pdf_norm:
-        return True
-
-    # Ignore all spaces
-    expected_compact = compact_normalize(
-        expected
-    )
-
-    pdf_compact = compact_normalize(
-        pdf_text
-    )
-
-    if expected_compact in pdf_compact:
-        return True
-
-    return False
-
-
-# =========================================================
-# SPLIT PDF INTO TEXT BLOCKS
+# PDF BLOCK EXTRACTION
 # =========================================================
 #
-# Important:
+# We read the PDF first.
 #
-# We do NOT compare the Order Form against the entire PDF
-# page as one giant string for proofreading.
+# A paragraph may be broken into:
 #
-# Instead we create candidate text blocks.
+# MACHINE WASH COLD WITH LIKE
+# COLORS. CHLORINE BLEACH WHEN
+# NEEDED.
 #
-# This prevents unrelated content from becoming the
-# "OUTPUT".
+# So we create:
+#
+# - individual lines
+# - 2-line combinations
+# - 3-line combinations
+# - paragraphs
+#
+# This allows long artwork text to be compared.
 # =========================================================
 
-def create_pdf_blocks(pdf_text):
+def extract_pdf_blocks(page_text):
 
-    if not pdf_text:
+    if not page_text:
         return []
 
-    raw_lines = pdf_text.splitlines()
+    raw_lines = page_text.splitlines()
 
     lines = []
 
@@ -596,37 +279,32 @@ def create_pdf_blocks(pdf_text):
 
         line = line.strip()
 
-        if line:
-            lines.append(
-                line
-            )
+        if not line:
+            continue
+
+        # Ignore extremely long technical strings.
+        # These are often production/metadata-like text
+        # rather than artwork content.
+        if len(line) > 500:
+            continue
+
+        lines.append(line)
 
     if not lines:
         return []
 
     blocks = []
 
-    # -----------------------------------------------------
     # Individual lines
-    # -----------------------------------------------------
-
     for line in lines:
 
-        blocks.append(
-            line
-        )
+        blocks.append({
+            "text": line,
+            "type": "line"
+        })
 
-    # -----------------------------------------------------
-    # Adjacent line combinations
-    #
-    # This handles artwork text such as:
-    #
-    # MACHINE WASH COLD WITH LIKE
-    # COLORS. CHLORINE BLEACH WHEN
-    # NEEDED. TUMBLE DRY LOW.
-    # -----------------------------------------------------
-
-    for window_size in [
+    # Consecutive line combinations
+    for size in [
         2,
         3,
         4,
@@ -635,59 +313,55 @@ def create_pdf_blocks(pdf_text):
         8,
         10,
         12,
-        15,
-        20
+        15
     ]:
 
-        if len(lines) < window_size:
+        if len(lines) < size:
             continue
 
         for start in range(
-            0,
-            len(lines) - window_size + 1
+            len(lines) - size + 1
         ):
 
             block = " ".join(
                 lines[
-                    start:start + window_size
+                    start:start + size
                 ]
             )
 
-            blocks.append(
-                block
-            )
+            blocks.append({
+                "text": block,
+                "type": f"{size}-line"
+            })
 
-    # -----------------------------------------------------
-    # Sentence-like blocks
-    # -----------------------------------------------------
-
-    full_text = " ".join(
-        lines
-    )
+    # Paragraph-like groups
+    paragraph_text = " ".join(lines)
 
     sentence_parts = re.split(
         r"(?<=[.!?])\s+",
-        full_text
+        paragraph_text
     )
 
-    for part in sentence_parts:
+    for sentence in sentence_parts:
 
-        part = part.strip()
+        sentence = sentence.strip()
 
-        if part:
-            blocks.append(
-                part
-            )
+        if sentence:
 
-    # Remove duplicates
-    unique_blocks = []
+            blocks.append({
+                "text": sentence,
+                "type": "sentence"
+            })
+
+    # Remove duplicate normalized blocks
+    unique = []
 
     seen = set()
 
     for block in blocks:
 
         normalized = normalize_text(
-            block
+            block["text"]
         )
 
         if not normalized:
@@ -696,317 +370,291 @@ def create_pdf_blocks(pdf_text):
         if normalized in seen:
             continue
 
-        seen.add(
-            normalized
-        )
+        seen.add(normalized)
 
-        unique_blocks.append(
-            block
-        )
+        unique.append(block)
 
-    return unique_blocks
+    return unique
 
 
 # =========================================================
-# LANGUAGE HEURISTICS
-# =========================================================
-
-FRENCH_WORDS = {
-    "avec",
-    "couleurs",
-    "similaires",
-    "utilisez",
-    "seulement",
-    "sans",
-    "chlore",
-    "nécessaire",
-    "sechage",
-    "séchage",
-    "culbutage",
-    "température",
-    "repassage",
-    "doux",
-    "laver",
-    "machine",
-    "froide"
-}
-
-ENGLISH_WORDS = {
-    "wash",
-    "machine",
-    "cold",
-    "colors",
-    "colour",
-    "similar",
-    "bleach",
-    "chlorine",
-    "needed",
-    "tumble",
-    "dry",
-    "low",
-    "iron",
-    "warm",
-    "only",
-    "do",
-    "not"
-}
-
-
-def language_score(
-    text,
-    language
-):
-
-    if language == "UNKNOWN":
-        return 0
-
-    tokens = set(
-        tokenize(text)
-    )
-
-    if not tokens:
-        return 0
-
-    if language == "FRENCH":
-
-        return len(
-            tokens.intersection(
-                FRENCH_WORDS
-            )
-        )
-
-    if language == "ENGLISH":
-
-        return len(
-            tokens.intersection(
-                ENGLISH_WORDS
-            )
-        )
-
-    return 0
-
-
-# =========================================================
-# SHARED TOKEN SCORE
+# BUILD EXCEL REFERENCE
 # =========================================================
 #
-# Used to prevent unrelated text from being selected.
+# IMPORTANT:
+#
+# Each PDF page is compared against ONE corresponding
+# Excel row.
+#
+# PDF page 1 -> Excel row 2
+# PDF page 2 -> Excel row 3
+# PDF page 3 -> Excel row 4
+# etc.
+#
+# The first Excel row is the header.
 # =========================================================
 
-def shared_token_ratio(
-    expected,
-    candidate
-):
+def build_row_reference(row, columns):
 
-    expected_tokens = tokenize(
-        expected
-    )
+    references = []
 
-    candidate_tokens = tokenize(
-        candidate
-    )
+    for column in columns:
 
-    if not expected_tokens:
-        return 0
+        if should_ignore_header(column):
+            continue
 
-    expected_set = set(
-        expected_tokens
-    )
+        value = row[column]
 
-    candidate_set = set(
-        candidate_tokens
-    )
+        if is_empty(value):
+            continue
 
-    shared = (
-        expected_set
-        .intersection(
-            candidate_set
-        )
-    )
+        value = str(value).strip()
 
-    return (
-        len(shared)
-        /
-        len(expected_set)
-    )
+        if not value:
+            continue
+
+        references.append({
+            "field": str(column),
+            "value": value,
+            "normalized": normalize_text(value)
+        })
+
+    return references
 
 
 # =========================================================
-# GET BEST PROOFREADING CANDIDATE
-# =========================================================
-#
-# This is deliberately conservative.
-#
-# We don't want:
-#
-# French Care
-# ↓
-# random English Care
-#
-# to appear as the output.
-#
-# A candidate must have strong textual relationship with
-# the Order Form cell before we show it.
+# EXACT MATCH
 # =========================================================
 
-def find_proofreading_candidate(
-    expected,
+def exact_match(
     pdf_text,
-    language="UNKNOWN"
+    excel_value
 ):
 
-    expected_norm = normalize_text(
-        expected
-    )
-
-    if not expected_norm:
-        return None
-
-    blocks = create_pdf_blocks(
+    pdf_normalized = normalize_text(
         pdf_text
     )
 
-    if not blocks:
+    excel_normalized = normalize_text(
+        excel_value
+    )
+
+    if not pdf_normalized:
+        return False
+
+    if not excel_normalized:
+        return False
+
+    # Exact phrase
+    if excel_normalized in pdf_normalized:
+        return True
+
+    # Ignore all spaces
+    pdf_compact = compact_text(
+        pdf_text
+    )
+
+    excel_compact = compact_text(
+        excel_value
+    )
+
+    if excel_compact in pdf_compact:
+        return True
+
+    return False
+
+
+# =========================================================
+# PDF TEXT -> EXCEL REFERENCE COMPARISON
+# =========================================================
+
+def compare_pdf_block_to_excel(
+    pdf_block,
+    excel_references
+):
+
+    pdf_norm = normalize_text(
+        pdf_block
+    )
+
+    if not pdf_norm:
         return None
 
-    expected_tokens = tokenize(
-        expected
+    pdf_tokens = tokenize(
+        pdf_block
     )
 
-    expected_length = len(
-        expected_tokens
-    )
+    if not pdf_tokens:
+        return None
 
-    best_candidate = None
-    best_rank = -1
+    best = None
 
-    for block in blocks:
+    for ref in excel_references:
 
-        block_norm = normalize_text(
-            block
-        )
+        expected = ref["value"]
 
-        if not block_norm:
-            continue
+        expected_norm = ref["normalized"]
 
-        block_tokens = tokenize(
-            block
-        )
-
-        if not block_tokens:
+        if not expected_norm:
             continue
 
         # -------------------------------------------------
-        # Exact normalized match
+        # EXACT MATCH
         # -------------------------------------------------
 
-        if (
-            expected_norm
-            in block_norm
+        if exact_match(
+            pdf_block,
+            expected
         ):
 
             return {
-                "text": block,
-                "similarity": 100,
-                "shared": 1.0
+                "field": ref["field"],
+                "reference": expected,
+                "score": 100,
+                "match_type": "EXACT",
+                "status": "PASS",
+                "difference": "—"
             }
+
+        # -------------------------------------------------
+        # Short values need strict matching
+        # -------------------------------------------------
+
+        expected_tokens = tokenize(
+            expected
+        )
+
+        if len(expected_tokens) == 1:
+
+            # Avoid matching "2" inside a larger number.
+            if len(expected_norm) <= SHORT_TEXT_MIN_LENGTH:
+
+                if expected_norm.isdigit():
+
+                    pattern = (
+                        r"(?<!\d)"
+                        + re.escape(expected_norm)
+                        + r"(?!\d)"
+                    )
+
+                    if re.search(
+                        pattern,
+                        pdf_norm
+                    ):
+
+                        return {
+                            "field": ref["field"],
+                            "reference": expected,
+                            "score": 100,
+                            "match_type": "EXACT",
+                            "status": "PASS",
+                            "difference": "—"
+                        }
+
+                    # Don't fuzzy match tiny numbers.
+                    continue
+
+                # Short text such as S, M, L, XL
+                # also should not fuzzy match randomly.
+                if len(expected_norm) <= 2:
+                    if expected_norm == pdf_norm:
+                        return {
+                            "field": ref["field"],
+                            "reference": expected,
+                            "score": 100,
+                            "match_type": "EXACT",
+                            "status": "PASS",
+                            "difference": "—"
+                        }
+
+                    continue
 
         # -------------------------------------------------
         # Similarity
         # -------------------------------------------------
 
         ratio = fuzz.ratio(
-            expected_norm,
-            block_norm
+            pdf_norm,
+            expected_norm
         )
 
-        token_ratio = fuzz.token_set_ratio(
-            expected_norm,
-            block_norm
+        partial = fuzz.partial_ratio(
+            pdf_norm,
+            expected_norm
         )
 
-        shared_ratio = shared_token_ratio(
-            expected,
-            block
+        token_set = fuzz.token_set_ratio(
+            pdf_norm,
+            expected_norm
         )
 
         # -------------------------------------------------
-        # Length difference
-        #
-        # We don't want a tiny piece of text to become
-        # the match for a huge paragraph.
+        # Shared word ratio
         # -------------------------------------------------
 
-        length_ratio = (
-            min(
-                len(expected_norm),
-                len(block_norm)
+        expected_set = set(
+            expected_tokens
+        )
+
+        pdf_set = set(
+            pdf_tokens
+        )
+
+        shared = (
+            expected_set.intersection(
+                pdf_set
             )
-            /
-            max(
-                len(expected_norm),
-                len(block_norm)
+        )
+
+        if expected_set:
+
+            shared_ratio = (
+                len(shared)
+                /
+                len(expected_set)
             )
-        )
+
+        else:
+
+            shared_ratio = 0
 
         # -------------------------------------------------
-        # Language
+        # Candidate score
         # -------------------------------------------------
 
-        lang_score = language_score(
-            block,
-            language
-        )
-
-        # -------------------------------------------------
-        # Combined ranking
-        # -------------------------------------------------
-
-        rank = (
+        score = (
             ratio * 0.45
             +
-            token_ratio * 0.20
+            partial * 0.15
             +
-            shared_ratio * 100 * 0.25
+            token_set * 0.20
             +
-            length_ratio * 100 * 0.10
+            shared_ratio * 100 * 0.20
         )
 
-        # Language boost
-        if language != "UNKNOWN":
-
-            if lang_score > 0:
-
-                rank += min(
-                    lang_score * 2,
-                    10
-                )
-
-            else:
-
-                # Strong penalty when the field language
-                # clearly doesn't resemble the candidate.
-                if expected_length >= 4:
-                    rank -= 12
-
         # -------------------------------------------------
-        # Minimum requirements
-        #
-        # Short strings need much stronger evidence.
+        # Don't match tiny PDF blocks against huge fields
         # -------------------------------------------------
 
-        if expected_length <= 2:
+        if len(pdf_tokens) == 1 and len(expected_tokens) > 5:
+            continue
+
+        # -------------------------------------------------
+        # Candidate acceptance
+        # -------------------------------------------------
+
+        if len(expected_tokens) <= 2:
 
             acceptable = (
-                ratio >= 90
+                ratio >= 88
                 and
                 shared_ratio >= 0.5
             )
 
-        elif expected_length <= 5:
+        elif len(expected_tokens) <= 5:
 
             acceptable = (
-                ratio >= 75
+                score >= 76
                 and
                 shared_ratio >= 0.50
             )
@@ -1014,468 +662,350 @@ def find_proofreading_candidate(
         else:
 
             acceptable = (
-                (
-                    ratio >= 72
-                    and
-                    shared_ratio >= 0.45
-                )
-                or
-                (
-                    token_ratio >= 80
-                    and
-                    shared_ratio >= 0.55
-                )
+                score >= MIN_MISMATCH_SCORE
+                and
+                shared_ratio >= MIN_SHARED_WORDS
             )
 
         if not acceptable:
             continue
 
-        if rank > best_rank:
+        # -------------------------------------------------
+        # Keep best candidate
+        # -------------------------------------------------
 
-            best_rank = rank
+        if best is None or score > best["score"]:
 
-            best_candidate = {
-                "text": block,
-                "similarity": ratio,
-                "shared": shared_ratio
+            best = {
+                "field": ref["field"],
+                "reference": expected,
+                "score": score,
+                "match_type": "PROBABLE",
+                "status": "FAIL",
+                "difference": create_difference(
+                    expected,
+                    pdf_block
+                )
             }
 
-    return best_candidate
+    return best
 
 
 # =========================================================
-# CHARACTER / WORD DIFFERENCE
+# DIFFERENCE DETECTOR
 # =========================================================
 
-def make_difference(
-    expected,
-    actual
+def create_difference(
+    reference,
+    pdf_text
 ):
 
-    expected_norm = normalize_text(
-        expected
+    ref_tokens = tokenize(
+        reference
     )
 
-    actual_norm = normalize_text(
-        actual
+    pdf_tokens = tokenize(
+        pdf_text
     )
-
-    if not expected_norm:
-        return "Reference data is empty."
-
-    if not actual_norm:
-        return "Reference data was not found in the PDF."
-
-    expected_words = expected_norm.split()
-    actual_words = actual_norm.split()
 
     matcher = SequenceMatcher(
         None,
-        expected_words,
-        actual_words
+        ref_tokens,
+        pdf_tokens
     )
 
     differences = []
 
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+    for tag, a1, a2, b1, b2 in matcher.get_opcodes():
 
         if tag == "equal":
             continue
 
-        expected_part = " ".join(
-            expected_words[i1:i2]
+        ref_part = " ".join(
+            ref_tokens[a1:a2]
         )
 
-        actual_part = " ".join(
-            actual_words[j1:j2]
+        pdf_part = " ".join(
+            pdf_tokens[b1:b2]
         )
 
         if tag == "replace":
 
             differences.append(
-                f"'{expected_part}' → '{actual_part}'"
+                f"{ref_part} → {pdf_part}"
             )
 
         elif tag == "delete":
 
             differences.append(
-                f"Missing '{expected_part}'"
+                f"Missing: {ref_part}"
             )
 
         elif tag == "insert":
 
             differences.append(
-                f"Extra '{actual_part}'"
+                f"Extra: {pdf_part}"
             )
 
     if not differences:
 
-        # Character-level fallback
-        ratio = fuzz.ratio(
-            expected_norm,
-            actual_norm
+        return (
+            "Text differs from Order Form reference."
         )
 
-        if ratio < 100:
-
-            return (
-                f"Text differs from reference "
-                f"({expected_norm} → {actual_norm})"
-            )
-
-        return "Formatting difference only."
-
-    # Don't make the report enormous
     return "; ".join(
-        differences[:8]
+        differences[:10]
     )
 
 
 # =========================================================
-# COMPARE ONE CELL
+# FIND PDF BLOCKS THAT HAVE A REFERENCE
+# =========================================================
+#
+# THIS IS THE IMPORTANT PART.
+#
+# We start from PDF blocks.
+#
+# We do NOT loop through every Excel field and ask:
+#
+# "Where is this field in PDF?"
+#
+# Instead:
+#
+# PDF text
+#    ↓
+# Find corresponding Order Form data
+#    ↓
+# Compare
+#
 # =========================================================
 
-def compare_cell(
-    expected,
-    pdf_text,
-    field_name
+def analyze_pdf_page(
+    page_text,
+    excel_references
 ):
 
-    expected = str(
-        expected
-    ).strip()
-
-    if not expected:
-
-        return {
-            "output": "",
-            "status": "SKIP",
-            "difference": "No Order Form data."
-        }
-
-    language = get_field_language(
-        field_name
+    blocks = extract_pdf_blocks(
+        page_text
     )
 
-    # =====================================================
-    # STEP 1 — EXACT NORMALIZED SEARCH
-    # =====================================================
+    if not blocks:
+        return []
 
-    if exact_normalized_exists(
-        expected,
-        pdf_text
-    ):
+    results = []
 
-        # Find a readable block containing it
-        blocks = create_pdf_blocks(
-            pdf_text
+    # -----------------------------------------------------
+    # We primarily use longer/meaningful blocks.
+    #
+    # Individual tiny lines can create duplicate results.
+    # -----------------------------------------------------
+
+    meaningful_blocks = []
+
+    for block in blocks:
+
+        text = block["text"]
+
+        normalized = normalize_text(
+            text
         )
 
-        output = expected
+        tokens = tokenize(
+            text
+        )
 
-        for block in blocks:
+        if not normalized:
+            continue
 
-            if (
-                normalize_text(expected)
-                in normalize_text(block)
-            ):
+        # Ignore tiny noise
+        if len(normalized) < 3:
+            continue
 
-                output = block
-                break
+        # Ignore extremely long technical strings
+        if len(normalized) > 1200:
+            continue
 
-        return {
-            "output": output,
-            "status": "PASS",
-            "difference": "—"
-        }
+        # Ignore pure numbers unless they are meaningful
+        if (
+            normalized.isdigit()
+            and len(normalized) <= 2
+        ):
+            continue
 
+        meaningful_blocks.append(
+            block
+        )
 
-    # =====================================================
-    # STEP 2 — PROOFREADING CANDIDATE
-    # =====================================================
+    # -----------------------------------------------------
+    # Compare blocks
+    # -----------------------------------------------------
 
-    candidate = find_proofreading_candidate(
-        expected,
-        pdf_text,
-        language
+    matched_blocks = []
+
+    for block in meaningful_blocks:
+
+        result = compare_pdf_block_to_excel(
+            block["text"],
+            excel_references
+        )
+
+        if result is None:
+            continue
+
+        result["pdf_text"] = block["text"]
+
+        matched_blocks.append(
+            result
+        )
+
+    # -----------------------------------------------------
+    # Remove duplicate results.
+    #
+    # Example:
+    #
+    # MACHINE WASH COLD
+    #
+    # MACHINE WASH COLD WITH LIKE
+    #
+    # MACHINE WASH COLD WITH LIKE COLORS
+    #
+    # We don't want 3 separate FAILs for one sentence.
+    # -----------------------------------------------------
+
+    final = []
+
+    used_keys = set()
+
+    # Prefer exact matches first
+    matched_blocks.sort(
+        key=lambda x: (
+            x["status"] != "PASS",
+            -len(x["reference"])
+        )
     )
 
+    for result in matched_blocks:
 
-    # =====================================================
-    # STEP 3 — NO RELIABLE MATCH
-    # =====================================================
+        key = (
+            result["field"],
+            normalize_text(
+                result["reference"]
+            )
+        )
 
-    if candidate is None:
+        if key in used_keys:
+            continue
 
-        return {
-            "output": "Not found in corresponding PDF page",
-            "status": "FAIL",
-            "difference": "Reference data not found."
-        }
+        used_keys.add(key)
 
+        final.append(
+            result
+        )
 
-    actual = candidate["text"]
-
-    difference = make_difference(
-        expected,
-        actual
-    )
-
-    return {
-        "output": actual,
-        "status": "FAIL",
-        "difference": difference
-    }
+    return final
 
 
 # =========================================================
-# READ EXCEL
+# LOAD EXCEL
 # =========================================================
 
-def read_order_form(
-    excel_file
-):
+def load_excel(file):
 
-    excel_file.seek(0)
+    file.seek(0)
 
     df = pd.read_excel(
-        excel_file,
+        file,
         header=0
     )
 
-    # Clean column names
-    cleaned_columns = []
-
-    for column in df.columns:
-
-        column_text = str(
-            column
-        ).strip()
-
-        cleaned_columns.append(
-            column_text
-        )
-
-    df.columns = cleaned_columns
+    df.columns = [
+        str(c).strip()
+        for c in df.columns
+    ]
 
     return df
 
 
 # =========================================================
-# EXTRACT PDF PAGES
-# =========================================================
-
-def extract_pdf_pages(
-    pdf_file
-):
-
-    pdf_file.seek(0)
-
-    pdf_bytes = pdf_file.read()
-
-    document = fitz.open(
-        stream=pdf_bytes,
-        filetype="pdf"
-    )
-
-    pages = []
-
-    for page_number, page in enumerate(
-        document,
-        start=1
-    ):
-
-        text = page.get_text(
-            "text"
-        )
-
-        pages.append({
-            "page": page_number,
-            "text": text
-        })
-
-    document.close()
-
-    return pages
-
-
-# =========================================================
-# ANALYZE EXCEL HEADERS
-# =========================================================
-
-def analyze_headers(
-    df
-):
-
-    results = []
-
-    for column in df.columns:
-
-        classification = classify_field(
-            column
-        )
-
-        concept = get_field_concept(
-            column
-        )
-
-        language = get_field_language(
-            column
-        )
-
-        non_empty = (
-            df[column]
-            .dropna()
-        )
-
-        if len(non_empty) > 0:
-
-            sample = str(
-                non_empty.iloc[0]
-            )
-
-        else:
-
-            sample = ""
-
-        results.append({
-
-            "FIELD": column,
-
-            "CLASSIFICATION":
-                classification,
-
-            "CONCEPT":
-                concept,
-
-            "LANGUAGE":
-                language,
-
-            "SAMPLE DATA":
-                sample
-        })
-
-    return pd.DataFrame(
-        results
-    )
-
-
-# =========================================================
-# CREATE QC REPORT
+# CREATE FINAL REPORT
 # =========================================================
 
 def create_report(
     df,
-    pdf_pages,
-    selected_fields
+    pdf_pages
 ):
 
-    results = []
+    report = []
 
     # -----------------------------------------------------
-    # Mapping:
+    # PDF page N corresponds to Excel row N+1
     #
-    # Excel Row 2 → PDF Page 1
-    # Excel Row 3 → PDF Page 2
-    # Excel Row 4 → PDF Page 3
+    # Excel header = row 1
+    # Excel row 2 = PDF page 1
+    # Excel row 3 = PDF page 2
     # etc.
     # -----------------------------------------------------
 
-    for excel_index, row in df.iterrows():
+    for page_index, page in enumerate(
+        pdf_pages
+    ):
 
-        pdf_page_number = (
-            excel_index + 1
-        )
+        excel_index = page_index
 
-        excel_row_number = (
-            excel_index + 2
-        )
+        # No corresponding Excel row
+        if excel_index >= len(df):
 
-        # -------------------------------------------------
-        # Missing corresponding PDF page
-        # -------------------------------------------------
-
-        if (
-            pdf_page_number
-            > len(pdf_pages)
-        ):
-
-            results.append({
-
-                "FIELD NO":
-                    len(results) + 1,
-
-                "EXCEL ROW":
-                    excel_row_number,
-
-                "PDF PAGE":
-                    pdf_page_number,
-
-                "FIELD":
-                    "PAGE CHECK",
-
-                "ORDER FORM DATA":
-                    "",
-
-                "OUTPUT":
-                    "PDF page not available",
-
-                "STATUS":
-                    "FAIL",
-
-                "DIFFERENCE":
-                    "Corresponding PDF page was not found."
+            report.append({
+                "FIELD NO": len(report) + 1,
+                "EXCEL ROW": "",
+                "PDF PAGE": page["page_number"],
+                "FIELD": "PDF PAGE",
+                "ORDER FORM DATA": "Not available",
+                "PDF OUTPUT": page["text"][:500],
+                "STATUS": "FAIL",
+                "DIFFERENCE": "No corresponding Order Form row."
             })
 
             continue
 
-        pdf_text = pdf_pages[
-            pdf_page_number - 1
-        ]["text"]
+        row = df.iloc[
+            excel_index
+        ]
 
+        references = build_row_reference(
+            row,
+            df.columns
+        )
+
+        page_results = analyze_pdf_page(
+            page["text"],
+            references
+        )
 
         # -------------------------------------------------
-        # Check every selected cell
+        # If no relevant Order Form match was found on
+        # the PDF page, don't invent failures.
         # -------------------------------------------------
 
-        for field in selected_fields:
+        for result in page_results:
 
-            value = row[field]
-
-            if is_empty_value(
-                value
-            ):
-                continue
-
-            value = str(
-                value
-            ).strip()
-
-            result = compare_cell(
-                value,
-                pdf_text,
-                field
-            )
-
-            results.append({
-
-                "FIELD NO":
-                    len(results) + 1,
+            report.append({
+                "FIELD NO": len(report) + 1,
 
                 "EXCEL ROW":
-                    excel_row_number,
+                    excel_index + 2,
 
                 "PDF PAGE":
-                    pdf_page_number,
+                    page["page_number"],
 
                 "FIELD":
-                    field,
+                    result["field"],
 
                 "ORDER FORM DATA":
-                    value,
+                    result["reference"],
 
-                "OUTPUT":
-                    result["output"],
+                "PDF OUTPUT":
+                    result["pdf_text"],
 
                 "STATUS":
                     result["status"],
@@ -1485,53 +1015,42 @@ def create_report(
             })
 
     return pd.DataFrame(
-        results
+        report
     )
 
 
 # =========================================================
-# COLOR STATUS
+# STATUS COLOR
 # =========================================================
 
-def color_status(
-    value
-):
+def status_style(value):
 
     if value == "PASS":
 
         return (
-            "background-color: #90EE90;"
-            "color: black;"
-            "font-weight: bold;"
+            "background-color:#90EE90;"
+            "color:black;"
+            "font-weight:bold;"
         )
 
     if value == "FAIL":
 
         return (
-            "background-color: #FF7F7F;"
-            "color: black;"
-            "font-weight: bold;"
-        )
-
-    if value == "SKIP":
-
-        return (
-            "background-color: #D3D3D3;"
-            "color: black;"
-            "font-weight: bold;"
+            "background-color:#FF7F7F;"
+            "color:black;"
+            "font-weight:bold;"
         )
 
     return ""
 
 
 # =========================================================
-# UPLOAD SECTION
+# UI
 # =========================================================
 
 left, right = st.columns(
     2
 )
-
 
 with left:
 
@@ -1540,13 +1059,13 @@ with left:
     )
 
     excel_file = st.file_uploader(
-        "Upload Flat File Excel",
+        "Upload Excel Order Form",
         type=[
             "xlsx",
             "xls"
-        ]
+        ],
+        key="excel"
     )
-
 
 with right:
 
@@ -1555,41 +1074,42 @@ with right:
     )
 
     pdf_file = st.file_uploader(
-        "Upload PDF Output",
+        "Upload PDF Artwork",
         type=[
             "pdf"
-        ]
+        ],
+        key="pdf"
     )
 
 
 # =========================================================
-# MAIN APPLICATION
+# START
 # =========================================================
 
 if excel_file and pdf_file:
 
-    # =====================================================
-    # READ EXCEL
-    # =====================================================
+    # -----------------------------------------------------
+    # Read Excel
+    # -----------------------------------------------------
 
     try:
 
-        df = read_order_form(
+        df = load_excel(
             excel_file
         )
 
     except Exception as error:
 
         st.error(
-            f"Unable to read Excel file: {error}"
+            f"Unable to read Excel: {error}"
         )
 
         st.stop()
 
 
-    # =====================================================
-    # READ PDF
-    # =====================================================
+    # -----------------------------------------------------
+    # Read PDF
+    # -----------------------------------------------------
 
     try:
 
@@ -1600,21 +1120,17 @@ if excel_file and pdf_file:
     except Exception as error:
 
         st.error(
-            f"Unable to read PDF file: {error}"
+            f"Unable to read PDF: {error}"
         )
 
         st.stop()
 
 
-    # =====================================================
-    # FILE INFORMATION
-    # =====================================================
+    # -----------------------------------------------------
+    # File information
+    # -----------------------------------------------------
 
     st.divider()
-
-    st.subheader(
-        "📌 File Information"
-    )
 
     c1, c2, c3 = st.columns(
         3
@@ -1637,206 +1153,82 @@ if excel_file and pdf_file:
     with c3:
 
         st.metric(
-            "Fields",
+            "Excel Fields",
             len(df.columns)
         )
 
 
-    if len(df) != len(pdf_pages):
+    # -----------------------------------------------------
+    # Mapping explanation
+    # -----------------------------------------------------
 
-        st.warning(
-            "⚠️ Excel data rows and PDF pages do not "
-            "have the same count. The application will "
-            "still compare the available Row → Page pairs."
-        )
-
-    else:
-
-        st.success(
-            "✅ Excel rows and PDF pages are aligned."
-        )
-
-
-    # =====================================================
-    # SMART FIELD ANALYSIS
-    # =====================================================
-
-    st.divider()
-
-    st.subheader(
-        "🧠 Smart Field Mapping"
-    )
-
-    field_analysis = analyze_headers(
-        df
+    st.info(
+        "📌 Comparison mapping: "
+        "Excel Row 2 → PDF Page 1, "
+        "Excel Row 3 → PDF Page 2, "
+        "Excel Row 4 → PDF Page 3, and so on."
     )
 
 
-    check_fields = (
-        field_analysis[
-            field_analysis[
-                "CLASSIFICATION"
-            ] == "CHECK"
-        ]["FIELD"]
-        .tolist()
-    )
-
-
-    review_fields = (
-        field_analysis[
-            field_analysis[
-                "CLASSIFICATION"
-            ] == "REVIEW"
-        ]["FIELD"]
-        .tolist()
-    )
-
-
-    ignore_fields = (
-        field_analysis[
-            field_analysis[
-                "CLASSIFICATION"
-            ] == "IGNORE"
-        ]["FIELD"]
-        .tolist()
-    )
-
-
-    st.write(
-        f"**Automatically detected artwork fields: "
-        f"{len(check_fields)}**"
-    )
-
-
-    if check_fields:
-
-        st.success(
-            ", ".join(
-                check_fields
-            )
-        )
-
-    else:
-
-        st.warning(
-            "No artwork fields were automatically detected."
-        )
-
-
-    # =====================================================
-    # FIELD ANALYSIS
-    # =====================================================
+    # -----------------------------------------------------
+    # Preview Excel
+    # -----------------------------------------------------
 
     with st.expander(
-        "🔎 View field mapping"
+        "📊 View Order Form"
     ):
 
         st.dataframe(
-            field_analysis,
+            df,
             use_container_width=True,
             hide_index=True
         )
 
 
-    # =====================================================
-    # UNKNOWN FIELDS
-    # =====================================================
-
-    if review_fields:
-
-        st.divider()
-
-        with st.expander(
-            "⚠️ Fields requiring review"
-        ):
-
-            st.write(
-                "These fields were not confidently identified. "
-                "Select them if they should be proofread."
-            )
-
-            additional_fields = st.multiselect(
-                "Additional fields:",
-                review_fields
-            )
-
-            for field in additional_fields:
-
-                if field not in check_fields:
-
-                    check_fields.append(
-                        field
-                    )
-
-
-    # =====================================================
-    # IGNORED FIELDS
-    # =====================================================
-
-    with st.expander(
-        "🚫 Ignored fields"
-    ):
-
-        if ignore_fields:
-
-            st.write(
-                ignore_fields
-            )
-
-        else:
-
-            st.write(
-                "No fields automatically ignored."
-            )
-
-
-    # =====================================================
-    # COMPARE BUTTON
-    # =====================================================
+    # -----------------------------------------------------
+    # Compare
+    # -----------------------------------------------------
 
     st.divider()
 
     if st.button(
-        "🔍 COMPARE FILES",
+        "🔍 START PDF PROOFREADING",
         type="primary",
         use_container_width=True
     ):
 
-        if not check_fields:
-
-            st.error(
-                "No fields selected for comparison."
-            )
-
-            st.stop()
-
-
         with st.spinner(
-            "Proofreading PDF against the Order Form..."
+            "Reading PDF artwork and comparing it against the Order Form..."
         ):
 
             report = create_report(
                 df,
-                pdf_pages,
-                check_fields
+                pdf_pages
             )
 
-
-        # =================================================
-        # REPORT
-        # =================================================
 
         st.divider()
 
         st.subheader(
-            "📋 QC Comparison Report"
+            "📋 Proofreading Report"
         )
 
+
+        # -------------------------------------------------
+        # No matches
+        # -------------------------------------------------
 
         if report.empty:
 
             st.warning(
-                "No data was available for comparison."
+                "No PDF artwork text could be matched "
+                "against the corresponding Order Form rows."
+            )
+
+            st.info(
+                "This does NOT automatically mean the artwork "
+                "is wrong. It means the PDF text could not be "
+                "confidently associated with Order Form data."
             )
 
         else:
@@ -1854,9 +1246,9 @@ if excel_file and pdf_file:
             )
 
 
-            # =================================================
-            # SUMMARY
-            # =================================================
+            # -------------------------------------------------
+            # Summary
+            # -------------------------------------------------
 
             c1, c2, c3 = st.columns(
                 3
@@ -1865,7 +1257,7 @@ if excel_file and pdf_file:
             with c1:
 
                 st.metric(
-                    "TOTAL CHECKED",
+                    "CHECKED",
                     len(report)
                 )
 
@@ -1884,32 +1276,31 @@ if excel_file and pdf_file:
                 )
 
 
-            # =================================================
-            # STYLED REPORT
-            # =================================================
+            # -------------------------------------------------
+            # Styled report
+            # -------------------------------------------------
 
-            styled_report = (
+            styled = (
                 report
                 .style
                 .map(
-                    color_status,
+                    status_style,
                     subset=[
                         "STATUS"
                     ]
                 )
             )
 
-
             st.dataframe(
-                styled_report,
+                styled,
                 use_container_width=True,
                 hide_index=True
             )
 
 
-            # =================================================
-            # CONCLUSION
-            # =================================================
+            # -------------------------------------------------
+            # Conclusion
+            # -------------------------------------------------
 
             st.divider()
 
@@ -1917,48 +1308,43 @@ if excel_file and pdf_file:
 
                 st.success(
                     "✅ CONCLUSION: "
-                    "All checked Order Form data was found "
-                    "correctly in the corresponding PDF artwork."
+                    "No proofreading mismatches were detected "
+                    "among the PDF text that could be associated "
+                    "with the Order Form."
                 )
 
             else:
 
                 st.error(
                     f"❌ CONCLUSION: "
-                    f"{fail_count} mismatch(es) found. "
-                    f"Please review the red FAIL rows."
+                    f"{fail_count} proofreading mismatch(es) detected."
                 )
 
 
-            # =================================================
-            # DOWNLOAD CSV
-            # =================================================
+            # -------------------------------------------------
+            # Download
+            # -------------------------------------------------
 
-            csv_data = (
+            csv = (
                 report
                 .to_csv(
                     index=False
                 )
                 .encode(
-                    "utf-8"
+                    "utf-8-sig"
                 )
             )
 
-
             st.download_button(
                 "⬇️ Download QC Report",
-                data=csv_data,
-                file_name=(
-                    "Order_Form_PDF_QC_Report.csv"
-                ),
+                data=csv,
+                file_name="Order_Form_PDF_Proofreading_Report.csv",
                 mime="text/csv",
                 use_container_width=True
             )
 
-
 else:
 
     st.info(
-        "Upload both the Order Form Excel and PDF Output "
-        "to begin proofreading."
+        "Upload both the Excel Order Form and PDF Artwork."
     )

@@ -52,18 +52,23 @@ st.markdown(
         background-color: #fafafa;
     }
 
-    /* Compare button */
-    div.stButton > button {
-        background-color: #72b7e6 !important;
-        color: white !important;
-        border: 2px solid black !important;
-        border-radius: 12px !important;
-        font-size: 18px !important;
-        font-weight: 700 !important;
-        height: 52px !important;
-        width: 100% !important;
-        transition: 0.2s;
-    }
+ div.stButton > button {
+    background-color: #2196F3 !important;
+    color: white !important;
+    border: 2px solid black !important;
+    border-radius: 12px !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    height: 52px !important;
+    width: 100% !important;
+    transition: 0.2s;
+}
+
+div.stButton > button:hover {
+    background-color: #1976D2 !important;
+    color: white !important;
+    border: 2px solid black !important;
+}
 
     div.stButton > button:hover {
         background-color: #559fd2 !important;

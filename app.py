@@ -8,85 +8,367 @@ from difflib import SequenceMatcher
 
 
 # =========================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # =========================================================
 
 st.set_page_config(
     page_title="PDF Proofreader",
     page_icon="🔍",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 
 # =========================================================
-# CUSTOM UI
+# DARK UI
 # =========================================================
 
 st.markdown(
     """
     <style>
 
-    /* Main background */
-    .stApp {
-        background-color: #ffffff;
+    /* =====================================================
+       COMPLETE DARK BACKGROUND
+       ===================================================== */
+
+    html,
+    body,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stApp"],
+    .stApp,
+    .main {
+        background-color: #0e1117 !important;
+        color: #ffffff !important;
     }
 
-    /* Main title */
-    .main-title {
-        font-size: 32px;
-        font-weight: 700;
-        margin-bottom: 5px;
+
+    /* Main application container */
+
+    [data-testid="stAppViewContainer"] {
+        background-color: #0e1117 !important;
     }
+
+
+    /* Header */
+
+    [data-testid="stHeader"] {
+        background-color: #0e1117 !important;
+    }
+
+
+    /* Main content */
+
+    [data-testid="stMain"] {
+        background-color: #0e1117 !important;
+    }
+
+
+    /* =====================================================
+       ALL TEXT
+       ===================================================== */
+
+    .stApp,
+    .stApp p,
+    .stApp label,
+    .stApp span,
+    .stApp div {
+        color: #ffffff;
+    }
+
+
+    /* =====================================================
+       TITLE
+       ===================================================== */
+
+    .main-title {
+        color: #ffffff !important;
+        font-size: 34px;
+        font-weight: 700;
+        margin-top: 5px;
+        margin-bottom: 4px;
+    }
+
 
     .sub-title {
-        color: #666666;
+        color: #b8c0cc !important;
         font-size: 15px;
-        margin-bottom: 25px;
+        margin-bottom: 30px;
     }
 
-    /* Upload boxes */
+
+    /* =====================================================
+       SECTION TITLES
+       ===================================================== */
+
+    .section-title {
+        color: #ffffff !important;
+        font-size: 20px;
+        font-weight: 700;
+        margin-top: 12px;
+        margin-bottom: 10px;
+    }
+
+
+    /* =====================================================
+       UPLOADER CONTAINER
+       ===================================================== */
+
     [data-testid="stFileUploader"] {
-        border: 1px solid #b8b8b8;
-        border-radius: 12px;
-        padding: 8px;
-        background-color: #fafafa;
+        background-color: #161b22 !important;
+        border: 1px solid #4b5563 !important;
+        border-radius: 12px !important;
+        padding: 8px !important;
     }
 
- div.stButton > button {
-    background-color: #2196F3 !important;
-    color: white !important;
-    border: 2px solid black !important;
-    border-radius: 12px !important;
-    font-size: 18px !important;
-    font-weight: 700 !important;
-    height: 52px !important;
-    width: 100% !important;
-    transition: 0.2s;
-}
 
-div.stButton > button:hover {
-    background-color: #1976D2 !important;
-    color: white !important;
-    border: 2px solid black !important;
-}
+    [data-testid="stFileUploaderDropzone"] {
+        background-color: #161b22 !important;
+        border: 1px solid #4b5563 !important;
+        border-radius: 10px !important;
+    }
+
+
+    [data-testid="stFileUploaderDropzoneInstructions"] {
+        color: #ffffff !important;
+    }
+
+
+    [data-testid="stFileUploaderDropzoneInstructions"] span {
+        color: #ffffff !important;
+    }
+
+
+    /* Upload button */
+
+    [data-testid="stFileUploader"] button {
+        background-color: #111827 !important;
+        color: #ffffff !important;
+        border: 1px solid #6b7280 !important;
+        border-radius: 8px !important;
+    }
+
+
+    [data-testid="stFileUploader"] button:hover {
+        background-color: #1f2937 !important;
+        color: #ffffff !important;
+    }
+
+
+    /* =====================================================
+       SELECT BOX / MULTISELECT
+       ===================================================== */
+
+    [data-baseweb="select"] > div {
+        background-color: #161b22 !important;
+        color: #ffffff !important;
+        border: 1px solid #4b5563 !important;
+        border-radius: 10px !important;
+    }
+
+
+    [data-baseweb="select"] input {
+        color: #ffffff !important;
+    }
+
+
+    [data-baseweb="select"] span {
+        color: #ffffff !important;
+    }
+
+
+    /* Dropdown menu */
+
+    [data-baseweb="popover"] {
+        background-color: #161b22 !important;
+    }
+
+
+    [role="option"] {
+        background-color: #161b22 !important;
+        color: #ffffff !important;
+    }
+
+
+    [role="option"]:hover {
+        background-color: #263241 !important;
+    }
+
+
+    /* Selected field pills */
+
+    [data-baseweb="tag"] {
+        background-color: #2563eb !important;
+        color: #ffffff !important;
+    }
+
+
+    [data-baseweb="tag"] span {
+        color: #ffffff !important;
+    }
+
+
+    /* =====================================================
+       COMPARE BUTTON
+       ===================================================== */
+
+    div.stButton > button {
+
+        background-color: #2196F3 !important;
+
+        color: #ffffff !important;
+
+        border: 2px solid #000000 !important;
+
+        border-radius: 12px !important;
+
+        font-size: 18px !important;
+
+        font-weight: 700 !important;
+
+        height: 54px !important;
+
+        width: 100% !important;
+
+        box-shadow: none !important;
+
+        transition: all 0.2s ease-in-out;
+
+    }
+
 
     div.stButton > button:hover {
-        background-color: #559fd2 !important;
-        color: white !important;
-        border: 2px solid black !important;
+
+        background-color: #1976D2 !important;
+
+        color: #ffffff !important;
+
+        border: 2px solid #000000 !important;
+
     }
 
-    /* Multiselect */
-    div[data-baseweb="select"] > div {
-        border-radius: 10px;
+
+    div.stButton > button:active {
+
+        background-color: #1565C0 !important;
+
+        color: #ffffff !important;
+
     }
 
-    /* Section titles */
-    .section-title {
-        font-size: 21px;
-        font-weight: 700;
-        margin-top: 15px;
-        margin-bottom: 10px;
+
+    /* =====================================================
+       DOWNLOAD BUTTON
+       ===================================================== */
+
+    div.stDownloadButton > button {
+
+        background-color: #1f2937 !important;
+
+        color: #ffffff !important;
+
+        border: 1px solid #6b7280 !important;
+
+        border-radius: 10px !important;
+
+        font-weight: 600 !important;
+
+    }
+
+
+    div.stDownloadButton > button:hover {
+
+        background-color: #374151 !important;
+
+        color: #ffffff !important;
+
+    }
+
+
+    /* =====================================================
+       DATAFRAME
+       ===================================================== */
+
+    [data-testid="stDataFrame"] {
+
+        border: 1px solid #374151 !important;
+
+        border-radius: 10px !important;
+
+    }
+
+
+    /* =====================================================
+       METRICS
+       ===================================================== */
+
+    [data-testid="stMetric"] {
+
+        background-color: #161b22 !important;
+
+        border: 1px solid #374151 !important;
+
+        border-radius: 10px !important;
+
+        padding: 12px !important;
+
+    }
+
+
+    [data-testid="stMetricLabel"] {
+
+        color: #b8c0cc !important;
+
+    }
+
+
+    [data-testid="stMetricValue"] {
+
+        color: #ffffff !important;
+
+    }
+
+
+    /* =====================================================
+       DIVIDER
+       ===================================================== */
+
+    hr {
+
+        border-color: #30363d !important;
+
+    }
+
+
+    /* =====================================================
+       INFO / CAPTION
+       ===================================================== */
+
+    .stCaption {
+
+        color: #9ca3af !important;
+
+    }
+
+
+    /* =====================================================
+       SUCCESS / WARNING / ERROR
+       ===================================================== */
+
+    [data-testid="stAlert"] {
+
+        border-radius: 10px !important;
+
+    }
+
+
+    /* =====================================================
+       SPINNER
+       ===================================================== */
+
+    [data-testid="stSpinner"] {
+
+        color: #ffffff !important;
+
     }
 
     </style>
@@ -128,6 +410,7 @@ def normalize_text(text):
         text
     )
 
+    # Case insensitive
     text = text.lower()
 
     # Normalize apostrophes
@@ -138,14 +421,14 @@ def normalize_text(text):
     text = text.replace("\n", " ")
     text = text.replace("\r", " ")
 
-    # Normal separators
+    # Treat punctuation/separators as spaces
     text = re.sub(
         r"[,.;:|/\\]+",
         " ",
         text
     )
 
-    # Hyphens
+    # Hyphens should not create mismatch
     text = re.sub(
         r"-+",
         " ",
@@ -159,7 +442,7 @@ def normalize_text(text):
         text
     )
 
-    # Apostrophe shouldn't matter
+    # Apostrophe differences should not cause failure
     text = text.replace(
         "'",
         ""
@@ -198,7 +481,7 @@ def tokenize(text):
 
 
 # =========================================================
-# EXCEL
+# LOAD EXCEL
 # =========================================================
 
 def load_excel(file):
@@ -211,15 +494,15 @@ def load_excel(file):
     )
 
     df.columns = [
-        str(c).strip()
-        for c in df.columns
+        str(column).strip()
+        for column in df.columns
     ]
 
     return df
 
 
 # =========================================================
-# PDF
+# LOAD PDF
 # =========================================================
 
 def load_pdf(file):
@@ -243,10 +526,12 @@ def load_pdf(file):
             "text"
         )
 
-        pages.append({
-            "page": page_number + 1,
-            "text": text
-        })
+        pages.append(
+            {
+                "page": page_number + 1,
+                "text": text
+            }
+        )
 
     document.close()
 
@@ -254,7 +539,7 @@ def load_pdf(file):
 
 
 # =========================================================
-# CREATE PDF BLOCKS
+# CREATE PDF TEXT BLOCKS
 # =========================================================
 
 def create_pdf_blocks(page_text):
@@ -273,7 +558,6 @@ def create_pdf_blocks(page_text):
         if not line:
             continue
 
-        # Ignore extremely long technical strings
         if len(line) > 1000:
             continue
 
@@ -294,7 +578,9 @@ def create_pdf_blocks(page_text):
 
 
     # -----------------------------------------------------
-    # Combined lines
+    # Combine adjacent lines
+    #
+    # Useful when artwork text wraps into paragraphs.
     # -----------------------------------------------------
 
     maximum = min(
@@ -352,9 +638,13 @@ def create_pdf_blocks(page_text):
         if normalized in seen:
             continue
 
-        seen.add(normalized)
+        seen.add(
+            normalized
+        )
 
-        unique.append(block)
+        unique.append(
+            block
+        )
 
     return unique
 
@@ -386,7 +676,7 @@ def exact_match(
     if expected_normalized in actual_normalized:
         return True
 
-    # Ignore spaces
+    # Ignore spaces completely
     if compact_text(expected) in compact_text(actual):
         return True
 
@@ -394,7 +684,7 @@ def exact_match(
 
 
 # =========================================================
-# DIFFERENCE
+# FIND DIFFERENCE
 # =========================================================
 
 def get_difference(
@@ -459,7 +749,7 @@ def get_difference(
 
 
 # =========================================================
-# SEARCH FOR EXACT CONTENT
+# EXACT SEARCH
 # =========================================================
 
 def search_exact_value(
@@ -477,15 +767,14 @@ def search_exact_value(
             return {
                 "status": "PASS",
                 "pdf": block,
-                "difference": "—",
-                "score": 100
+                "difference": "—"
             }
 
     return None
 
 
 # =========================================================
-# SEARCH FOR PROBABLE SPELLING/CONTENT MISMATCH
+# PROBABLE MISMATCH SEARCH
 # =========================================================
 
 def search_probable_mismatch(
@@ -506,7 +795,6 @@ def search_probable_mismatch(
 
     best = None
 
-
     for block in pdf_blocks:
 
         actual_normalized = normalize_text(
@@ -525,19 +813,7 @@ def search_probable_mismatch(
 
 
         # -------------------------------------------------
-        # Prevent tiny random matches
-        # -------------------------------------------------
-
-        if len(expected_tokens) == 1:
-
-            word = expected_tokens[0]
-
-            if len(word) <= 2:
-                continue
-
-
-        # -------------------------------------------------
-        # Similarity
+        # Similarity calculations
         # -------------------------------------------------
 
         ratio = fuzz.ratio(
@@ -588,7 +864,7 @@ def search_probable_mismatch(
 
 
         # -------------------------------------------------
-        # Combined score
+        # Combined similarity
         # -------------------------------------------------
 
         score = (
@@ -603,7 +879,7 @@ def search_probable_mismatch(
 
 
         # -------------------------------------------------
-        # Different rules for short and long fields
+        # Strict rules
         # -------------------------------------------------
 
         if len(expected_tokens) <= 2:
@@ -636,7 +912,7 @@ def search_probable_mismatch(
 
 
         # -------------------------------------------------
-        # Keep strongest match
+        # Keep best match
         # -------------------------------------------------
 
         if (
@@ -660,7 +936,7 @@ def search_probable_mismatch(
 
 
 # =========================================================
-# CHECK ONE FIELD
+# CHECK FIELD
 # =========================================================
 
 def check_field(
@@ -683,7 +959,7 @@ def check_field(
 
 
     # -----------------------------------------------------
-    # 2. Probable mismatch
+    # 2. Similar text / spelling mismatch
     # -----------------------------------------------------
 
     probable = search_probable_mismatch(
@@ -697,19 +973,16 @@ def check_field(
 
 
     # -----------------------------------------------------
-    # 3. Nothing found
+    # 3. Not found
     #
     # IMPORTANT:
-    #
-    # Because the user selected this field, it MUST
-    # appear in the report.
+    # Selected fields are NEVER silently skipped.
     # -----------------------------------------------------
 
     return {
         "status": "NOT FOUND",
         "pdf": "Not found in PDF",
-        "difference": "Selected field was not detected in the PDF.",
-        "score": None
+        "difference": "Selected field was not detected in the PDF."
     }
 
 
@@ -731,8 +1004,9 @@ def build_report(
     # -----------------------------------------------------
     # PDF PAGE → EXCEL ROW
     #
-    # Excel row 2 → PDF page 1
-    # Excel row 3 → PDF page 2
+    # Excel row 2 = PDF page 1
+    # Excel row 3 = PDF page 2
+    # Excel row 4 = PDF page 3
     # etc.
     # -----------------------------------------------------
 
@@ -744,49 +1018,30 @@ def build_report(
 
 
         # -------------------------------------------------
-        # No corresponding Excel row
+        # Corresponding Excel row doesn't exist
         # -------------------------------------------------
 
         if excel_index >= len(df):
 
             for field in selected_fields:
 
-                results.append({
-
-                    "FIELD NO":
-                        field_no,
-
-                    "PDF PAGE":
-                        page["page"],
-
-                    "EXCEL ROW":
-                        "N/A",
-
-                    "FIELD":
-                        field,
-
-                    "ORDER FORM DATA":
-                        "No Excel row",
-
-                    "PDF OUTPUT":
-                        "No corresponding Order Form row",
-
-                    "STATUS":
-                        "NOT FOUND",
-
-                    "DIFFERENCE":
-                        "No corresponding Excel row."
-
-                })
+                results.append(
+                    {
+                        "FIELD NO": field_no,
+                        "PDF PAGE": page["page"],
+                        "EXCEL ROW": "N/A",
+                        "FIELD": field,
+                        "ORDER FORM DATA": "No Excel row",
+                        "PDF OUTPUT": "No corresponding Order Form row",
+                        "STATUS": "NOT FOUND",
+                        "DIFFERENCE": "No corresponding Excel row."
+                    }
+                )
 
                 field_no += 1
 
             continue
 
-
-        # -------------------------------------------------
-        # Excel row
-        # -------------------------------------------------
 
         row = df.iloc[
             excel_index
@@ -794,7 +1049,7 @@ def build_report(
 
 
         # -------------------------------------------------
-        # PDF blocks
+        # Extract PDF blocks
         # -------------------------------------------------
 
         pdf_blocks = create_pdf_blocks(
@@ -823,38 +1078,23 @@ def build_report(
 
 
             # -------------------------------------------------
-            # Blank Order Form field
+            # Blank Order Form value
             # -------------------------------------------------
 
             if not value:
 
-                results.append({
-
-                    "FIELD NO":
-                        field_no,
-
-                    "PDF PAGE":
-                        page["page"],
-
-                    "EXCEL ROW":
-                        excel_index + 2,
-
-                    "FIELD":
-                        field,
-
-                    "ORDER FORM DATA":
-                        "",
-
-                    "PDF OUTPUT":
-                        "Blank Order Form value",
-
-                    "STATUS":
-                        "NOT FOUND",
-
-                    "DIFFERENCE":
-                        "Order Form field is blank."
-
-                })
+                results.append(
+                    {
+                        "FIELD NO": field_no,
+                        "PDF PAGE": page["page"],
+                        "EXCEL ROW": excel_index + 2,
+                        "FIELD": field,
+                        "ORDER FORM DATA": "",
+                        "PDF OUTPUT": "Blank Order Form value",
+                        "STATUS": "NOT FOUND",
+                        "DIFFERENCE": "Order Form field is blank."
+                    }
+                )
 
                 field_no += 1
 
@@ -862,7 +1102,7 @@ def build_report(
 
 
             # -------------------------------------------------
-            # Check selected field
+            # Perform check
             # -------------------------------------------------
 
             result = check_field(
@@ -871,33 +1111,18 @@ def build_report(
             )
 
 
-            results.append({
-
-                "FIELD NO":
-                    field_no,
-
-                "PDF PAGE":
-                    page["page"],
-
-                "EXCEL ROW":
-                    excel_index + 2,
-
-                "FIELD":
-                    field,
-
-                "ORDER FORM DATA":
-                    value,
-
-                "PDF OUTPUT":
-                    result["pdf"],
-
-                "STATUS":
-                    result["status"],
-
-                "DIFFERENCE":
-                    result["difference"]
-
-            })
+            results.append(
+                {
+                    "FIELD NO": field_no,
+                    "PDF PAGE": page["page"],
+                    "EXCEL ROW": excel_index + 2,
+                    "FIELD": field,
+                    "ORDER FORM DATA": value,
+                    "PDF OUTPUT": result["pdf"],
+                    "STATUS": result["status"],
+                    "DIFFERENCE": result["difference"]
+                }
+            )
 
             field_no += 1
 
@@ -908,7 +1133,7 @@ def build_report(
 
 
 # =========================================================
-# STATUS STYLING
+# STATUS COLORS
 # =========================================================
 
 def style_status(value):
@@ -916,40 +1141,44 @@ def style_status(value):
     if value == "PASS":
 
         return (
-            "background-color:#8FE388;"
-            "color:black;"
-            "font-weight:bold;"
+            "background-color: #238636;"
+            "color: white;"
+            "font-weight: bold;"
         )
 
     if value == "FAIL":
 
         return (
-            "background-color:#FF7777;"
-            "color:black;"
-            "font-weight:bold;"
+            "background-color: #da3633;"
+            "color: white;"
+            "font-weight: bold;"
         )
 
     if value == "NOT FOUND":
 
         return (
-            "background-color:#FFD966;"
-            "color:black;"
-            "font-weight:bold;"
+            "background-color: #9e6a03;"
+            "color: white;"
+            "font-weight: bold;"
         )
 
     return ""
 
 
 # =========================================================
-# UPLOAD SECTION
+# UPLOAD AREA
 # =========================================================
 
-left, right = st.columns(
+left_column, right_column = st.columns(
     2
 )
 
 
-with left:
+# =========================================================
+# ORDER FORM
+# =========================================================
+
+with left_column:
 
     st.markdown(
         '<div class="section-title">📊 Order Form</div>',
@@ -966,7 +1195,11 @@ with left:
     )
 
 
-with right:
+# =========================================================
+# PDF
+# =========================================================
+
+with right_column:
 
     st.markdown(
         '<div class="section-title">📄 PDF Output</div>',
@@ -983,7 +1216,7 @@ with right:
 
 
 # =========================================================
-# READ EXCEL
+# LOAD EXCEL
 # =========================================================
 
 df = None
@@ -996,10 +1229,10 @@ if excel_file:
             excel_file
         )
 
-    except Exception as error:
+    except Exception:
 
         st.error(
-            "Unable to read the Excel file."
+            "Unable to read the Excel Order Form."
         )
 
         st.stop()
@@ -1015,23 +1248,23 @@ if excel_file:
     )
 
     selected_fields = st.multiselect(
-
-        "Fields",
-
+        "Select the fields from your Order Form",
         options=[
-            str(c)
-            for c in df.columns
+            str(column)
+            for column in df.columns
         ],
-
         default=[],
-
         label_visibility="collapsed"
-
     )
 
 
+else:
+
+    selected_fields = []
+
+
 # =========================================================
-# READ PDF
+# LOAD PDF
 # =========================================================
 
 pdf_pages = None
@@ -1044,7 +1277,7 @@ if pdf_file:
             pdf_file
         )
 
-    except Exception as error:
+    except Exception:
 
         st.error(
             "Unable to read the PDF file."
@@ -1084,15 +1317,20 @@ if (
             )
 
 
+        # =================================================
+        # REPORT
+        # =================================================
+
         st.divider()
 
-        st.subheader(
-            "QC Report"
+        st.markdown(
+            '<div class="section-title">QC Report</div>',
+            unsafe_allow_html=True
         )
 
 
         # =================================================
-        # SUMMARY
+        # COUNTS
         # =================================================
 
         pass_count = int(
@@ -1118,15 +1356,15 @@ if (
 
 
         # =================================================
-        # SUMMARY CARDS
+        # SUMMARY
         # =================================================
 
-        c1, c2, c3 = st.columns(
+        col1, col2, col3 = st.columns(
             3
         )
 
 
-        with c1:
+        with col1:
 
             st.metric(
                 "PASS",
@@ -1134,7 +1372,7 @@ if (
             )
 
 
-        with c2:
+        with col2:
 
             st.metric(
                 "FAIL",
@@ -1142,7 +1380,7 @@ if (
             )
 
 
-        with c3:
+        with col3:
 
             st.metric(
                 "NOT FOUND",
@@ -1189,15 +1427,14 @@ if (
         elif not_found_count > 0:
 
             st.warning(
-                f"⚠️ REVIEW — {not_found_count} selected "
-                f"field(s) were not found in the PDF."
+                f"⚠️ REVIEW — {not_found_count} "
+                f"selected field(s) were not found in the PDF."
             )
 
         else:
 
             st.success(
-                "✅ PASS — All selected fields matched "
-                "the PDF artwork."
+                "✅ PASS — All selected fields matched the PDF artwork."
             )
 
 
@@ -1217,23 +1454,16 @@ if (
 
 
         st.download_button(
-
             label="⬇️ Download QC Report",
-
             data=csv_data,
-
-            file_name=(
-                "PDF_Proofreading_QC_Report.csv"
-            ),
-
+            file_name="PDF_Proofreading_QC_Report.csv",
             mime="text/csv",
-
             use_container_width=True
         )
 
 
 # =========================================================
-# INITIAL STATE
+# INITIAL INSTRUCTIONS
 # =========================================================
 
 if not excel_file:

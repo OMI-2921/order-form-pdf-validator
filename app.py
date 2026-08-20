@@ -750,6 +750,273 @@ def create_pdf_blocks(page_text):
     return unique
 
 
+
+# =========================================================
+# PFL / PANELLED ARTWORK LOGIC
+# =========================================================
+#
+# PFL is treated differently from normal continuous artwork.
+# Panel numbers are used when they can be detected. The actual
+# panel number itself is removed from comparison content.
+#
+# The important behavior is that a variable field may continue
+# from one panel into the next panel. Therefore PFL creates
+# cross-panel comparison blocks from the complete panel sequence.
+# =========================================================
+
+def _panel_number_from_line(line):
+    """
+    Detect a panel sequence number from a line.
+
+    Supported examples:
+        1
+        01
+        PANEL 1
+        PANEL NO. 1
+        PANEL #1
+        PANEL-1
+
+    A bare number is accepted only when it is a small integer.
+    """
+    if not line:
+        return None
+
+    value = str(line).strip()
+
+    match = re.fullmatch(
+        r"(?:panel\s*(?:no\.?|number|#)?\s*[-:]?\s*)?(\d{1,3})",
+        value,
+        flags=re.IGNORECASE
+    )
+
+    if not match:
+        return None
+
+    number = int(match.group(1))
+
+    if 1 <= number <= 99:
+        return number
+
+    return None
+
+
+def split_pfl_panels(page_text):
+    """
+    Split PFL text into panel segments when panel numbers are
+    detectable.
+
+    If panel numbers are found in sequence, the segments are
+    sorted by panel number.
+
+    The function supports both common layouts:
+      1. panel number above panel content
+      2. panel number below panel content
+
+    If reliable panel numbering cannot be established, the
+    original PDF extraction order is retained.
+    """
+    if not page_text:
+        return []
+
+    raw_lines = page_text.splitlines()
+
+    lines = []
+
+    for raw_line in raw_lines:
+        line = clean_pdf_line(raw_line)
+
+        if not line:
+            continue
+
+        if len(line) > 1500:
+            continue
+
+        lines.append(line)
+
+    if not lines:
+        return []
+
+    markers = []
+
+    for index, line in enumerate(lines):
+        number = _panel_number_from_line(line)
+
+        if number is not None:
+            markers.append(
+                {
+                    "index": index,
+                    "number": number
+                }
+            )
+
+    # We need at least two distinct panel numbers and panel 1
+    # before using the panel-specific ordering logic.
+    distinct_numbers = []
+
+    for marker in markers:
+        if marker["number"] not in distinct_numbers:
+            distinct_numbers.append(marker["number"])
+
+    if len(distinct_numbers) < 2 or 1 not in distinct_numbers:
+        return lines
+
+    # Duplicate panel numbers are suspicious, so fall back to
+    # normal PDF extraction rather than making an unsafe reorder.
+    if len(distinct_numbers) != len(markers):
+        return lines
+
+    # Determine whether numbers are likely ABOVE or BELOW the
+    # panel content.
+    #
+    # If the first marker is very early, assume numbers are above.
+    # Otherwise, if there is meaningful content before the first
+    # marker, assume numbers are below.
+    first_marker_index = markers[0]["index"]
+
+    number_is_above = first_marker_index <= 1
+
+    segments = []
+
+    if number_is_above:
+        for position, marker in enumerate(markers):
+            start = marker["index"] + 1
+
+            if position + 1 < len(markers):
+                end = markers[position + 1]["index"]
+            else:
+                end = len(lines)
+
+            content = lines[start:end]
+
+            if content:
+                segments.append(
+                    {
+                        "number": marker["number"],
+                        "lines": content
+                    }
+                )
+
+    else:
+        # Number is probably below each panel.
+        start = 0
+
+        for marker in markers:
+            end = marker["index"]
+            content = lines[start:end]
+
+            if content:
+                segments.append(
+                    {
+                        "number": marker["number"],
+                        "lines": content
+                    }
+                )
+
+            start = marker["index"] + 1
+
+        # Anything after the last panel number is ambiguous.
+        # Keep it after the numbered panels rather than dropping it.
+        if start < len(lines):
+            segments.append(
+                {
+                    "number": 999999,
+                    "lines": lines[start:]
+                }
+            )
+
+    # Sort only when every real segment has a panel number.
+    if not segments:
+        return lines
+
+    segments.sort(
+        key=lambda item: item["number"]
+    )
+
+    ordered_lines = []
+
+    for segment in segments:
+        ordered_lines.extend(segment["lines"])
+
+    return ordered_lines
+
+
+def create_pfl_pdf_blocks(page_text):
+    """
+    Create comparison blocks for PFL.
+
+    Unlike the normal mode, PFL deliberately creates larger
+    adjacent-line blocks so content can continue across a panel
+    boundary.
+
+    Example:
+
+        Panel 1:
+        MACHINE WASH COLD WITH LIKE
+
+        Panel 2:
+        COLORS.
+
+    becomes a searchable continuous block:
+
+        MACHINE WASH COLD WITH LIKE COLORS.
+    """
+    ordered_lines = split_pfl_panels(page_text)
+
+    if not ordered_lines:
+        return []
+
+    blocks = []
+
+    # Individual lines remain available for short fields.
+    for line in ordered_lines:
+        blocks.append(line)
+
+    # Larger windows allow a field to cross from one panel into
+    # the next panel. A larger maximum is intentional for PFL.
+    maximum = min(
+        20,
+        len(ordered_lines)
+    )
+
+    for size in range(2, maximum + 1):
+        for start in range(
+            len(ordered_lines) - size + 1
+        ):
+            block = " ".join(
+                ordered_lines[
+                    start:start + size
+                ]
+            )
+
+            if block:
+                blocks.append(block)
+
+    # Also create one complete continuous sequence. This is useful
+    # when a long care/content value spans many lines/panels.
+    complete_sequence = " ".join(ordered_lines)
+
+    if complete_sequence:
+        blocks.append(complete_sequence)
+
+    # Remove duplicate normalized blocks.
+    unique = []
+    seen = set()
+
+    for block in blocks:
+        normalized = normalize_text(block)
+
+        if not normalized:
+            continue
+
+        if normalized in seen:
+            continue
+
+        seen.add(normalized)
+        unique.append(block)
+
+    return unique
+
+
 # =========================================================
 # EXACT MATCH
 # =========================================================
@@ -1519,7 +1786,8 @@ def check_field(
 def build_report(
     df,
     pdf_pages,
-    selected_fields
+    selected_fields,
+    product_type="Other"
 ):
 
     results = []
@@ -1578,12 +1846,20 @@ def build_report(
 
 
         # -------------------------------------------------
-        # Extract smart PDF blocks
+        # Extract PDF blocks according to Product Type
         # -------------------------------------------------
 
-        pdf_blocks = create_pdf_blocks(
-            page["text"]
-        )
+        if product_type == "PFL":
+            # PFL = panelled artwork. Panel sequence is detected
+            # and content is allowed to continue across panels.
+            pdf_blocks = create_pfl_pdf_blocks(
+                page["text"]
+            )
+        else:
+            # HTL / Other = existing continuous-data logic.
+            pdf_blocks = create_pdf_blocks(
+                page["text"]
+            )
 
 
         # -------------------------------------------------
@@ -1705,6 +1981,42 @@ def style_status(value):
 
 
     return ""
+
+
+# =========================================================
+# PRODUCT TYPE
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">🏷️ Product Type</div>',
+    unsafe_allow_html=True
+)
+
+product_type = st.selectbox(
+    "Select Product Type",
+    options=[
+        "PFL",
+        "HTL",
+        "Other"
+    ],
+    index=2,
+    help=(
+        "PFL = panelled artwork where variable data can continue "
+        "from one panel to another. HTL and Other use the normal "
+        "continuous-data comparison."
+    )
+)
+
+if product_type == "PFL":
+    st.caption(
+        "PFL mode: panel numbers are used when detected, and "
+        "variable data can continue across panel boundaries."
+    )
+else:
+    st.caption(
+        "Standard mode: PDF content is compared using the "
+        "existing continuous-data logic."
+    )
 
 
 # =========================================================
@@ -1936,7 +2248,8 @@ if (
             report = build_report(
                 df,
                 pdf_pages,
-                selected_fields
+                selected_fields,
+                product_type
             )
 
 
@@ -2117,6 +2430,17 @@ if (
                 PDF Page 3 → Excel Row 4
 
                 and so on.
+
+                **Product Type**
+
+                **PFL:** Panel numbers are detected when possible.
+                Panel content is ordered by panel sequence and
+                adjacent panels are treated as continuous artwork,
+                so a selected variable field can continue from one
+                panel to the next.
+
+                **HTL / Other:** The existing standard PDF
+                comparison logic is used.
 
                 **Mismatch detection**
 

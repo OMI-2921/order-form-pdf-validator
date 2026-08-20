@@ -32,20 +32,13 @@ st.markdown(
     [data-testid="stAppViewContainer"],
     [data-testid="stApp"],
     .stApp,
-    .main {
+    .main,
+    [data-testid="stMain"] {
         background-color: #0e1117 !important;
         color: #ffffff !important;
     }
 
-    [data-testid="stAppViewContainer"] {
-        background-color: #0e1117 !important;
-    }
-
     [data-testid="stHeader"] {
-        background-color: #0e1117 !important;
-    }
-
-    [data-testid="stMain"] {
         background-color: #0e1117 !important;
     }
 
@@ -159,18 +152,12 @@ st.markdown(
         height: 54px !important;
         width: 100% !important;
         box-shadow: none !important;
-        transition: all 0.2s ease-in-out;
     }
 
     div.stButton > button:hover {
         background-color: #1976D2 !important;
         color: #ffffff !important;
         border: 2px solid #000000 !important;
-    }
-
-    div.stButton > button:active {
-        background-color: #1565C0 !important;
-        color: #ffffff !important;
     }
 
     div.stDownloadButton > button {
@@ -239,14 +226,14 @@ st.markdown(
 
 st.markdown(
     '<div class="sub-title">'
-    'Compare selected Order Form fields against PDF artwork.'
+    'Compare selected variable Order Form fields against PDF artwork.'
     '</div>',
     unsafe_allow_html=True
 )
 
 
 # =========================================================
-# TEXT NORMALIZATION
+# NORMALIZATION
 # =========================================================
 
 def normalize_text(text):
@@ -263,42 +250,74 @@ def normalize_text(text):
 
     text = text.lower()
 
-    # Normalize apostrophes
+    # -----------------------------------------------------
+    # Normalize common PDF characters
+    # -----------------------------------------------------
+
     text = text.replace("’", "'")
     text = text.replace("`", "'")
+    text = text.replace("–", "-")
+    text = text.replace("—", "-")
 
+    # -----------------------------------------------------
     # PDF line breaks
+    # -----------------------------------------------------
+
     text = text.replace("\n", " ")
     text = text.replace("\r", " ")
 
-    # Treat separators as spaces
+    # -----------------------------------------------------
+    # IMPORTANT:
+    #
+    # The PDF may extract bullets as "n".
+    # We DO NOT want that "n" to become real content.
+    # -----------------------------------------------------
+
+    text = re.sub(
+        r"(^|\s)n(?=\s)",
+        " ",
+        text
+    )
+
+    # -----------------------------------------------------
+    # Separators
+    # -----------------------------------------------------
+
     text = re.sub(
         r"[,.;:|/\\]+",
         " ",
         text
     )
 
-    # Hyphens become spaces
     text = re.sub(
         r"-+",
         " ",
         text
     )
 
+    # -----------------------------------------------------
     # Remove remaining punctuation
+    # -----------------------------------------------------
+
     text = re.sub(
         r"[^\w%#'\s]",
         " ",
         text
     )
 
+    # -----------------------------------------------------
     # Apostrophe differences ignored
+    # -----------------------------------------------------
+
     text = text.replace(
         "'",
         ""
     )
 
+    # -----------------------------------------------------
     # Multiple spaces
+    # -----------------------------------------------------
+
     text = re.sub(
         r"\s+",
         " ",
@@ -328,6 +347,189 @@ def tokenize(text):
         return []
 
     return value.split()
+
+
+# =========================================================
+# FIELD TYPE DETECTION
+#
+# This is NOT deciding what to check.
+# The user-selected field is always checked.
+#
+# This only helps us locate the correct variable
+# information inside the PDF.
+# =========================================================
+
+def get_field_type(field_name):
+
+    field = normalize_text(
+        field_name
+    )
+
+    compact = field.replace(
+        " ",
+        ""
+    )
+
+    # Country of Origin
+
+    if (
+        "coo" in compact
+        or "countryoforigin" in compact
+        or "countryorigin" in compact
+        or "madein" in compact
+        or "origin" in compact
+    ):
+
+        return "COO"
+
+
+    # Fiber / Fabric / Content
+
+    if (
+        "fiber" in compact
+        or "fibre" in compact
+        or "fabric" in compact
+        or "content" in compact
+        or "composition" in compact
+        or "fabrication" in compact
+    ):
+
+        return "CONTENT"
+
+
+    # Care / Washing
+
+    if (
+        "care" in compact
+        or "wash" in compact
+        or "washing" in compact
+        or "laundry" in compact
+        or "instruction" in compact
+    ):
+
+        return "CARE"
+
+
+    # Size
+
+    if (
+        "size" in compact
+        or "sizeline" in compact
+        or "alpha" in compact
+        or "waist" in compact
+        or "inseam" in compact
+        or "fit" in compact
+    ):
+
+        return "SIZE"
+
+
+    # RN
+
+    if (
+        compact == "rn"
+        or "registrationnumber" in compact
+        or "companyrn" in compact
+    ):
+
+        return "RN"
+
+
+    # Brand
+
+    if (
+        "brand" in compact
+    ):
+
+        return "BRAND"
+
+
+    # Color
+
+    if (
+        "color" in compact
+        or "colour" in compact
+    ):
+
+        return "COLOR"
+
+
+    # Gender
+
+    if (
+        "gender" in compact
+    ):
+
+        return "GENDER"
+
+
+    # Attribute
+
+    if (
+        "attribute" in compact
+        or "technology" in compact
+        or "feature" in compact
+        or "description" in compact
+    ):
+
+        return "ATTRIBUTE"
+
+
+    return "GENERAL"
+
+
+# =========================================================
+# FIELD LANGUAGE / REGION DETECTION
+# =========================================================
+
+def get_field_region(field_name):
+
+    field = normalize_text(
+        field_name
+    )
+
+    compact = field.replace(
+        " ",
+        ""
+    )
+
+    # English
+
+    if (
+        "_en" in str(field_name).lower()
+        or compact.endswith("en")
+        or "english" in compact
+    ):
+
+        return "EN"
+
+
+    # French / Canada
+
+    if (
+        "_fr" in str(field_name).lower()
+        or compact.endswith("fr")
+        or "french" in compact
+        or "canada" in compact
+    ):
+
+        return "FR"
+
+
+    # Spanish
+
+    if (
+        "_sp" in str(field_name).lower()
+        or compact.endswith("sp")
+        or "spanish" in compact
+        or "espanol" in compact
+        or "span" in compact
+    ):
+
+        return "SP"
+
+
+    return ""
 
 
 # =========================================================
@@ -389,7 +591,43 @@ def load_pdf(file):
 
 
 # =========================================================
-# CREATE PDF TEXT BLOCKS
+# CLEAN PDF LINE
+# =========================================================
+
+def clean_pdf_line(line):
+
+    if not line:
+        return ""
+
+    line = str(line).strip()
+
+    # -----------------------------------------------------
+    # Remove PDF bullet/keystroke "n"
+    #
+    # Examples:
+    #
+    # n US :
+    # n CA :
+    # n MX :
+    #
+    # becomes:
+    #
+    # US :
+    # CA :
+    # MX :
+    # -----------------------------------------------------
+
+    line = re.sub(
+        r"^\s*n\s+(?=[A-Za-z])",
+        "",
+        line
+    )
+
+    return line.strip()
+
+
+# =========================================================
+# CREATE SMART PDF BLOCKS
 # =========================================================
 
 def create_pdf_blocks(page_text):
@@ -401,38 +639,52 @@ def create_pdf_blocks(page_text):
 
     lines = []
 
-    for line in raw_lines:
+    for raw_line in raw_lines:
 
-        line = line.strip()
+        line = clean_pdf_line(
+            raw_line
+        )
 
         if not line:
             continue
 
-        if len(line) > 1000:
+        if len(line) > 1500:
             continue
 
-        lines.append(line)
+        lines.append(
+            line
+        )
+
 
     if not lines:
         return []
 
+
     blocks = []
 
+
     # -----------------------------------------------------
-    # Individual lines
+    # INDIVIDUAL LINES
+    #
+    # Important because many variable fields are contained
+    # inside one PDF line.
     # -----------------------------------------------------
 
     for line in lines:
 
-        blocks.append(line)
+        blocks.append(
+            line
+        )
 
 
     # -----------------------------------------------------
-    # Adjacent line combinations
+    # ADJACENT LINE BLOCKS
+    #
+    # Used for wrapped care/content text.
     # -----------------------------------------------------
 
     maximum = min(
-        15,
+        8,
         len(lines)
     )
 
@@ -451,19 +703,20 @@ def create_pdf_blocks(page_text):
                 ]
             )
 
-            blocks.append(block)
+            if block:
+
+                blocks.append(
+                    block
+                )
 
 
     # -----------------------------------------------------
-    # Full page
+    # Full page is deliberately NOT used as the primary
+    # comparison block.
+    #
+    # This prevents unrelated static/regional information
+    # from being mixed with variable data.
     # -----------------------------------------------------
-
-    full_page = " ".join(
-        lines
-    )
-
-    if full_page:
-        blocks.append(full_page)
 
 
     # -----------------------------------------------------
@@ -520,101 +773,291 @@ def exact_match(
     if not actual_normalized:
         return False
 
-    # -----------------------------------------------------
-    # Exact normalized text
-    #
-    # This is deliberately NOT a simple "expected in actual"
-    # check.
-    #
-    # Example:
-    #
-    # Expected:
-    # CHLORINE BLEACH
-    #
-    # Actual:
-    # ONLY NON CHLORINE BLEACH
-    #
-    # This must NOT become PASS.
-    # -----------------------------------------------------
 
-    if expected_normalized == actual_normalized:
+    # Normal match
+
+    if expected_normalized in actual_normalized:
+
         return True
 
-    # -----------------------------------------------------
-    # Ignore spaces completely ONLY when the actual block
-    # has the same content.
-    # -----------------------------------------------------
 
-    if compact_text(expected) == compact_text(actual):
+    # Space-independent match
+
+    expected_compact = compact_text(
+        expected
+    )
+
+    actual_compact = compact_text(
+        actual
+    )
+
+    if (
+        expected_compact
+        and
+        expected_compact in actual_compact
+    ):
+
         return True
+
 
     return False
 
 
 # =========================================================
-# SEQUENCE INFORMATION
+# EXPECTED VALUE SEARCH
 # =========================================================
 
-def sequence_analysis(
-    expected_tokens,
-    actual_tokens
+def search_exact_value(
+    expected,
+    pdf_blocks
 ):
 
-    if not expected_tokens or not actual_tokens:
-        return {
-            "common_tokens": [],
-            "longest_run": [],
-            "common_count": 0,
-            "coverage": 0
-        }
+    for block in pdf_blocks:
 
-    matcher = SequenceMatcher(
-        None,
-        expected_tokens,
+        if exact_match(
+            expected,
+            block
+        ):
+
+            return {
+                "status": "PASS",
+                "pdf": block,
+                "difference": "—",
+                "score": 100
+            }
+
+    return None
+
+
+# =========================================================
+# FIELD ANCHORS
+#
+# These help us locate the relevant variable value.
+# They prevent static information from being treated as
+# a mismatch.
+# =========================================================
+
+FIELD_ANCHORS = {
+
+    "COO": [
+        "made in",
+        "hecho en",
+        "fabrique en",
+        "madein"
+    ],
+
+    "CONTENT": [
+        "shell",
+        "liner",
+        "body",
+        "fabric",
+        "fiber",
+        "fibre",
+        "content",
+        "composition",
+        "exterior",
+        "extérieur",
+        "forro",
+        "doublure"
+    ],
+
+    "CARE": [
+        "machine wash",
+        "wash",
+        "lavar",
+        "laver",
+        "dry clean",
+        "bleach",
+        "blanchiment",
+        "detergent",
+        "detergente"
+    ],
+
+    "RN": [
+        "rn",
+        "ca"
+    ],
+
+    "SIZE": [
+        "size"
+    ],
+
+    "COLOR": [
+        "color",
+        "colour"
+    ],
+
+    "BRAND": [
+        "brand"
+    ],
+
+    "GENDER": [
+        "girls",
+        "boys",
+        "women",
+        "men",
+        "unisex"
+    ],
+
+    "ATTRIBUTE": [
+        "attribute",
+        "technology",
+        "feature"
+    ],
+
+    "GENERAL": []
+}
+
+
+# =========================================================
+# CHECK IF BLOCK IS RELEVANT TO FIELD
+# =========================================================
+
+def is_relevant_block(
+    block,
+    field_type,
+    field_name,
+    expected
+):
+
+    normalized_block = normalize_text(
+        block
+    )
+
+    if not normalized_block:
+        return False
+
+
+    # -----------------------------------------------------
+    # Field-specific anchors
+    # -----------------------------------------------------
+
+    anchors = FIELD_ANCHORS.get(
+        field_type,
+        []
+    )
+
+
+    for anchor in anchors:
+
+        anchor_norm = normalize_text(
+            anchor
+        )
+
+        if (
+            anchor_norm
+            and
+            anchor_norm in normalized_block
+        ):
+
+            return True
+
+
+    # -----------------------------------------------------
+    # Language-specific clues
+    #
+    # Only used when the selected field name explicitly
+    # indicates a language.
+    # -----------------------------------------------------
+
+    region = get_field_region(
+        field_name
+    )
+
+
+    if region == "EN":
+
+        english_markers = [
+            "made in",
+            "machine wash",
+            "shell",
+            "liner",
+            "polyester",
+            "span dex",
+            "bleach"
+        ]
+
+        for marker in english_markers:
+
+            if normalize_text(marker) in normalized_block:
+
+                return True
+
+
+    if region == "FR":
+
+        french_markers = [
+            "laver",
+            "machine",
+            "extérieur",
+            "doublure",
+            "polyester",
+            "élasthanne",
+            "sans chlore"
+        ]
+
+        for marker in french_markers:
+
+            if normalize_text(marker) in normalized_block:
+
+                return True
+
+
+    if region == "SP":
+
+        spanish_markers = [
+            "lavar",
+            "máquina",
+            "maquina",
+            "cuerpo",
+            "forro",
+            "poliéster",
+            "poliester",
+            "cloro",
+            "hecho en"
+        ]
+
+        for marker in spanish_markers:
+
+            if normalize_text(marker) in normalized_block:
+
+                return True
+
+
+    return False
+
+
+# =========================================================
+# TOKEN OVERLAP
+# =========================================================
+
+def token_overlap(
+    expected,
+    actual
+):
+
+    expected_tokens = set(
+        tokenize(expected)
+    )
+
+    actual_tokens = set(
+        tokenize(actual)
+    )
+
+    if not expected_tokens:
+        return 0
+
+    common = (
+        expected_tokens
+        &
         actual_tokens
     )
 
-    matching_blocks = matcher.get_matching_blocks()
-
-    common_tokens = []
-
-    longest_run = []
-
-    for block in matching_blocks:
-
-        if block.size <= 0:
-            continue
-
-        current = expected_tokens[
-            block.a:block.a + block.size
-        ]
-
-        common_tokens.extend(
-            current
-        )
-
-        if len(current) > len(longest_run):
-
-            longest_run = current
-
-    common_count = len(
-        set(expected_tokens)
-        &
-        set(actual_tokens)
-    )
-
-    coverage = (
-        common_count
+    return (
+        len(common)
         /
-        len(set(expected_tokens))
+        len(expected_tokens)
     )
-
-    return {
-        "common_tokens": common_tokens,
-        "longest_run": longest_run,
-        "common_count": common_count,
-        "coverage": coverage
-    }
 
 
 # =========================================================
@@ -634,10 +1077,11 @@ def get_difference(
         actual
     )
 
-    if not expected_tokens or not actual_tokens:
-
+    if not expected_tokens:
         return "Content differs."
 
+    if not actual_tokens:
+        return "Expected value is missing from PDF."
 
     matcher = SequenceMatcher(
         None,
@@ -652,6 +1096,7 @@ def get_difference(
         if tag == "equal":
             continue
 
+
         expected_part = " ".join(
             expected_tokens[a1:a2]
         )
@@ -660,13 +1105,13 @@ def get_difference(
             actual_tokens[b1:b2]
         )
 
+
         if tag == "replace":
 
-            if expected_part and actual_part:
+            differences.append(
+                f"{expected_part} → {actual_part}"
+            )
 
-                differences.append(
-                    f"{expected_part} → {actual_part}"
-                )
 
         elif tag == "delete":
 
@@ -674,156 +1119,47 @@ def get_difference(
                 f"Missing: {expected_part}"
             )
 
+
         elif tag == "insert":
+
+            # IMPORTANT:
+            #
+            # Extra static PDF content should NOT become
+            # a failure automatically.
+            #
+            # Therefore inserted words are only shown when
+            # they occur inside a relevant candidate.
 
             differences.append(
                 f"Extra: {actual_part}"
             )
+
 
     if not differences:
 
         return "Content differs."
 
     return "; ".join(
-        differences[:10]
+        differences[:8]
     )
 
 
 # =========================================================
-# EXACT SEARCH
-# =========================================================
-
-def search_exact_value(
-    expected,
-    pdf_blocks
-):
-
-    expected_tokens = tokenize(
-        expected
-    )
-
-    for block in pdf_blocks:
-
-        actual_tokens = tokenize(
-            block
-        )
-
-        if not actual_tokens:
-            continue
-
-        # -------------------------------------------------
-        # Exact block match
-        # -------------------------------------------------
-
-        if exact_match(
-            expected,
-            block
-        ):
-
-            return {
-                "status": "PASS",
-                "pdf": block,
-                "difference": "—"
-            }
-
-        # -------------------------------------------------
-        # If expected is a multi-word field and appears as
-        # an exact sequence inside a PDF block, only accept
-        # PASS when the surrounding text is clearly just
-        # formatting/wrapping.
-        #
-        # Otherwise it is handled as a possible mismatch.
-        # -------------------------------------------------
-
-        if len(expected_tokens) >= 3:
-
-            expected_norm = normalize_text(
-                expected
-            )
-
-            actual_norm = normalize_text(
-                block
-            )
-
-            # Exact sequence at block level
-            if (
-                expected_norm in actual_norm
-                and
-                len(actual_tokens)
-                <= len(expected_tokens) + 2
-            ):
-
-                # Check that the extra words aren't meaningful
-                # inserted content.
-
-                if fuzz.ratio(
-                    expected_norm,
-                    actual_norm
-                ) >= 92:
-
-                    return {
-                        "status": "PASS",
-                        "pdf": block,
-                        "difference": "—"
-                    }
-
-    return None
-
-
-# =========================================================
-# FIND STRONG COMMON SEQUENCE
-# =========================================================
-
-def find_strong_sequence(
-    expected_tokens,
-    actual_tokens
-):
-
-    if not expected_tokens or not actual_tokens:
-        return None
-
-    matcher = SequenceMatcher(
-        None,
-        expected_tokens,
-        actual_tokens
-    )
-
-    blocks = matcher.get_matching_blocks()
-
-    best = None
-
-    for block in blocks:
-
-        if block.size <= 0:
-            continue
-
-        matched = expected_tokens[
-            block.a:block.a + block.size
-        ]
-
-        if not matched:
-            continue
-
-        if (
-            best is None
-            or
-            len(matched)
-            >
-            len(best)
-        ):
-
-            best = matched
-
-    return best
-
-
-# =========================================================
-# PROBABLE MISMATCH SEARCH
+# FIND PROBABLE VARIABLE MISMATCH
+#
+# This is the most important new function.
+#
+# We DO NOT compare the Order Form value against the
+# entire PDF.
+#
+# We only consider PDF blocks relevant to the selected
+# variable field.
 # =========================================================
 
 def search_probable_mismatch(
     expected,
-    pdf_blocks
+    pdf_blocks,
+    field_name
 ):
 
     expected_normalized = normalize_text(
@@ -838,17 +1174,54 @@ def search_probable_mismatch(
         return None
 
 
+    field_type = get_field_type(
+        field_name
+    )
+
+
+    candidates = []
+
+
+    # -----------------------------------------------------
+    # First: field-relevant blocks only
+    # -----------------------------------------------------
+
+    for block in pdf_blocks:
+
+        if is_relevant_block(
+            block,
+            field_type,
+            field_name,
+            expected
+        ):
+
+            candidates.append(
+                block
+            )
+
+
+    # -----------------------------------------------------
+    # If no relevant block exists:
+    #
+    # DO NOT start comparing against the entire PDF.
+    #
+    # This is what prevents static data from creating
+    # false failures.
+    # -----------------------------------------------------
+
+    if not candidates:
+
+        return None
+
+
     best = None
 
 
-    for block in pdf_blocks:
+    for block in candidates:
 
         actual_normalized = normalize_text(
             block
         )
-
-        if not actual_normalized:
-            continue
 
         actual_tokens = tokenize(
             block
@@ -856,28 +1229,6 @@ def search_probable_mismatch(
 
         if not actual_tokens:
             continue
-
-
-        # -------------------------------------------------
-        # Sequence analysis
-        # -------------------------------------------------
-
-        analysis = sequence_analysis(
-            expected_tokens,
-            actual_tokens
-        )
-
-        coverage = analysis[
-            "coverage"
-        ]
-
-        longest_run = analysis[
-            "longest_run"
-        ]
-
-        common_count = analysis[
-            "common_count"
-        ]
 
 
         # -------------------------------------------------
@@ -899,217 +1250,207 @@ def search_probable_mismatch(
             actual_normalized
         )
 
-
-        # -------------------------------------------------
-        # Longest contiguous sequence ratio
-        # -------------------------------------------------
-
-        if expected_tokens:
-
-            sequence_ratio = (
-                len(longest_run)
-                /
-                len(expected_tokens)
-            )
-
-        else:
-
-            sequence_ratio = 0
+        overlap = token_overlap(
+            expected,
+            block
+        )
 
 
         # -------------------------------------------------
-        # Combined score
+        # Score
         # -------------------------------------------------
 
         score = (
             ratio * 0.35
             +
-            partial * 0.10
+            partial * 0.20
             +
-            token_ratio * 0.20
+            token_ratio * 0.25
             +
-            coverage * 100 * 0.20
-            +
-            sequence_ratio * 100 * 0.15
+            overlap * 100 * 0.20
         )
 
 
-        # =================================================
-        # RULE 1
-        #
-        # Two or more common consecutive words are a
-        # strong indication that this is the same artwork
-        # field with a changed value.
-        #
-        # Example:
-        #
-        # MADE IN CHINA
-        # MADE IN VIETNAM
-        #
-        # Common sequence:
-        # MADE IN
-        #
-        # Therefore FAIL.
-        # =================================================
+        # -------------------------------------------------
+        # Determine whether this is actually a useful
+        # mismatch candidate.
+        # -------------------------------------------------
 
-        strong_sequence = (
-            len(longest_run) >= 2
+        expected_word_count = len(
+            expected_tokens
         )
 
 
-        # =================================================
-        # RULE 2
-        #
-        # Long fields such as care instructions.
-        #
-        # If a large portion of the expected text appears
-        # in the same sequence, but the content differs,
-        # report FAIL.
-        # =================================================
+        if field_type == "COO":
 
-        long_field_match = (
-            len(expected_tokens) >= 6
-            and
-            (
-                coverage >= 0.45
-                or
-                sequence_ratio >= 0.35
+            # COO is special.
+            #
+            # If the PDF has "MADE IN VIETNAM" while the
+            # Order Form says "MADE IN CHINA", this should
+            # be a mismatch.
+            #
+            # "MADE IN" gives us the strong contextual anchor.
+
+            expected_has_made_in = (
+                "made in"
+                in
+                expected_normalized
             )
-            and
-            score >= 55
-        )
+
+            actual_has_made_in = (
+                "made in"
+                in
+                actual_normalized
+            )
 
 
-        # =================================================
-        # RULE 3
-        #
-        # Short fields.
-        #
-        # For a two-word value, at least one meaningful
-        # neighboring word must match.
-        # =================================================
-
-        short_field_match = False
-
-        if len(expected_tokens) <= 2:
-
-            short_field_match = (
-                strong_sequence
+            if (
+                expected_has_made_in
                 and
-                coverage >= 0.50
+                actual_has_made_in
+            ):
+
+                # Extract everything after "made in"
+
+                expected_country = re.sub(
+                    r"^.*?made in\s+",
+                    "",
+                    expected_normalized
+                ).strip()
+
+                actual_country = re.sub(
+                    r"^.*?made in\s+",
+                    "",
+                    actual_normalized
+                ).strip()
+
+
+                # Country comparison
+
+                if (
+                    expected_country
+                    and
+                    actual_country
+                ):
+
+                    country_similarity = fuzz.ratio(
+                        expected_country,
+                        actual_country
+                    )
+
+
+                    if (
+                        country_similarity < 95
+                    ):
+
+                        return {
+                            "status": "FAIL",
+                            "pdf": block,
+                            "difference": get_difference(
+                                expected,
+                                block
+                            ),
+                            "score": 100
+                        }
+
+
+        # -------------------------------------------------
+        # General mismatch rules
+        # -------------------------------------------------
+
+        if expected_word_count <= 2:
+
+            acceptable = (
+                score >= 72
+                and
+                overlap >= 0.35
+            )
+
+        elif expected_word_count <= 5:
+
+            acceptable = (
+                score >= 68
+                and
+                overlap >= 0.35
+            )
+
+        else:
+
+            acceptable = (
+                score >= 65
+                and
+                overlap >= 0.30
             )
 
 
-        # =================================================
-        # RULE 4
-        #
-        # Medium fields.
-        # =================================================
-
-        medium_field_match = False
-
-        if 3 <= len(expected_tokens) <= 5:
-
-            medium_field_match = (
-                (
-                    strong_sequence
-                    and
-                    coverage >= 0.40
-                )
-                or
-                (
-                    coverage >= 0.60
-                    and
-                    score >= 65
-                )
-            )
-
-
-        # =================================================
-        # DECISION
-        # =================================================
-
-        probable_mismatch = (
-            short_field_match
-            or
-            medium_field_match
-            or
-            long_field_match
-        )
-
-
-        if not probable_mismatch:
+        if not acceptable:
             continue
 
 
         # -------------------------------------------------
-        # Avoid accepting a completely unrelated block.
-        # -------------------------------------------------
-
-        if common_count <= 0:
-            continue
-
-
-        # -------------------------------------------------
-        # Create result
-        # -------------------------------------------------
-
-        result = {
-            "status": "FAIL",
-            "pdf": block,
-            "difference": get_difference(
-                expected,
-                block
-            ),
-            "score": score,
-            "coverage": coverage,
-            "sequence": len(longest_run)
-        }
-
-
-        # -------------------------------------------------
-        # Keep strongest candidate
+        # Keep best candidate
         # -------------------------------------------------
 
         if (
             best is None
             or
-            result["score"]
-            >
-            best["score"]
+            score > best["score"]
         ):
 
-            best = result
+            best = {
+                "status": "FAIL",
+                "pdf": block,
+                "difference": get_difference(
+                    expected,
+                    block
+                ),
+                "score": score
+            }
 
 
     return best
 
 
 # =========================================================
-# CHECK FIELD
+# CHECK ONE VARIABLE FIELD
 # =========================================================
 
 def check_field(
     expected,
-    pdf_blocks
+    pdf_blocks,
+    field_name
 ):
+
+    # -----------------------------------------------------
+    # Blank Order Form value
+    #
+    # IMPORTANT:
+    #
+    # If the variable field has no value in the Order Form,
+    # it is NOT required.
+    # -----------------------------------------------------
+
+    if (
+        expected is None
+        or
+        str(expected).strip() == ""
+    ):
+
+        return {
+            "status": "SKIP",
+            "pdf": "—",
+            "difference": "No variable data in Order Form."
+        }
+
 
     expected = str(
         expected
     ).strip()
 
-    if not expected:
 
-        return {
-            "status": "SKIP",
-            "pdf": "Blank Order Form value",
-            "difference": "Order Form value is blank."
-        }
-
-
-    # =====================================================
-    # 1. EXACT MATCH
-    # =====================================================
+    # -----------------------------------------------------
+    # 1. EXACT VARIABLE VALUE
+    # -----------------------------------------------------
 
     exact = search_exact_value(
         expected,
@@ -1121,13 +1462,25 @@ def check_field(
         return exact
 
 
-    # =====================================================
-    # 2. PROBABLE MISMATCH
-    # =====================================================
+    # -----------------------------------------------------
+    # 2. SEARCH FOR A RELEVANT DIFFERENT VALUE
+    #
+    # Example:
+    #
+    # Order Form:
+    # MADE IN CHINA
+    #
+    # PDF:
+    # MADE IN VIETNAM
+    #
+    # Result:
+    # FAIL
+    # -----------------------------------------------------
 
     probable = search_probable_mismatch(
         expected,
-        pdf_blocks
+        pdf_blocks,
+        field_name
     )
 
     if probable:
@@ -1135,29 +1488,32 @@ def check_field(
         return probable
 
 
-    # =====================================================
-    # 3. COMPLETELY ABSENT
+    # -----------------------------------------------------
+    # 3. NOT FOUND
     #
-    # IMPORTANT:
+    # This means:
     #
-    # If there is no meaningful evidence that this field
-    # exists in the PDF, IGNORE it.
+    # - The expected variable value is absent
+    # - AND we did not find a sufficiently relevant
+    #   alternative variable value
     #
-    # This is different from an error.
-    # =====================================================
+    # We do NOT call unrelated static PDF information
+    # a FAIL.
+    # -----------------------------------------------------
 
     return {
-        "status": "SKIP",
-        "pdf": "Not detected in PDF",
-        "difference": (
-            "Order Form data is not present in the PDF. "
-            "Comparison ignored."
-        )
+        "status": "NOT FOUND",
+        "pdf": "Not found in relevant PDF area",
+        "difference": "Selected variable value was not detected."
     }
 
 
 # =========================================================
 # BUILD REPORT
+#
+# PAGE 1 → EXCEL ROW 2
+# PAGE 2 → EXCEL ROW 3
+# PAGE 3 → EXCEL ROW 4
 # =========================================================
 
 def build_report(
@@ -1172,11 +1528,11 @@ def build_report(
 
 
     # -----------------------------------------------------
-    # PDF PAGE → EXCEL ROW
+    # Process PDF pages.
     #
-    # Excel row 2 = PDF page 1
-    # Excel row 3 = PDF page 2
-    # Excel row 4 = PDF page 3
+    # PDF page index 0 = Excel row 2
+    # PDF page index 1 = Excel row 3
+    # etc.
     # -----------------------------------------------------
 
     for page_index, page in enumerate(
@@ -1202,7 +1558,7 @@ def build_report(
                         "FIELD": field,
                         "ORDER FORM DATA": "No Excel row",
                         "PDF OUTPUT": "No corresponding Order Form row",
-                        "STATUS": "SKIP",
+                        "STATUS": "NOT FOUND",
                         "DIFFERENCE": "No corresponding Excel row."
                     }
                 )
@@ -1212,13 +1568,17 @@ def build_report(
             continue
 
 
+        # -------------------------------------------------
+        # Get corresponding Excel row
+        # -------------------------------------------------
+
         row = df.iloc[
             excel_index
         ]
 
 
         # -------------------------------------------------
-        # Extract PDF blocks
+        # Extract smart PDF blocks
         # -------------------------------------------------
 
         pdf_blocks = create_pdf_blocks(
@@ -1227,7 +1587,7 @@ def build_report(
 
 
         # -------------------------------------------------
-        # CHECK EVERY SELECTED FIELD
+        # Compare ONLY user-selected fields
         # -------------------------------------------------
 
         for field in selected_fields:
@@ -1247,7 +1607,7 @@ def build_report(
 
 
             # -------------------------------------------------
-            # Blank Order Form value
+            # Blank variable field = NOT REQUIRED
             # -------------------------------------------------
 
             if not value:
@@ -1259,9 +1619,9 @@ def build_report(
                         "EXCEL ROW": excel_index + 2,
                         "FIELD": field,
                         "ORDER FORM DATA": "",
-                        "PDF OUTPUT": "Blank Order Form value",
+                        "PDF OUTPUT": "—",
                         "STATUS": "SKIP",
-                        "DIFFERENCE": "Order Form field is blank. Ignored."
+                        "DIFFERENCE": "Blank Order Form value — PDF content ignored."
                     }
                 )
 
@@ -1271,12 +1631,13 @@ def build_report(
 
 
             # -------------------------------------------------
-            # Perform check
+            # Compare variable field
             # -------------------------------------------------
 
             result = check_field(
                 value,
-                pdf_blocks
+                pdf_blocks,
+                field
             )
 
 
@@ -1315,6 +1676,7 @@ def style_status(value):
             "font-weight: bold;"
         )
 
+
     if value == "FAIL":
 
         return (
@@ -1323,13 +1685,24 @@ def style_status(value):
             "font-weight: bold;"
         )
 
-    if value == "SKIP":
+
+    if value == "NOT FOUND":
 
         return (
-            "background-color: #6b7280;"
+            "background-color: #9e6a03;"
             "color: white;"
             "font-weight: bold;"
         )
+
+
+    if value == "SKIP":
+
+        return (
+            "background-color: #555555;"
+            "color: white;"
+            "font-weight: bold;"
+        )
+
 
     return ""
 
@@ -1412,9 +1785,17 @@ if excel_file:
     # =====================================================
 
     st.markdown(
-        '<div class="section-title">Select Fields to Validate</div>',
+        '<div class="section-title">'
+        'Select Variable Fields to Validate'
+        '</div>',
         unsafe_allow_html=True
     )
+
+    st.caption(
+        "Only the fields selected below are treated as "
+        "variable artwork data. Other PDF content is ignored."
+    )
+
 
     selected_fields = st.multiselect(
         "Select the fields from your Order Form",
@@ -1456,13 +1837,85 @@ if pdf_file:
 
 
 # =========================================================
+# FILE INFORMATION
+# =========================================================
+
+if (
+    excel_file
+    and
+    pdf_file
+):
+
+    st.divider()
+
+    st.markdown(
+        '<div class="section-title">'
+        '📌 File Information'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+
+    info1, info2, info3 = st.columns(
+        3
+    )
+
+
+    with info1:
+
+        st.metric(
+            "Excel Data Rows",
+            len(df)
+        )
+
+
+    with info2:
+
+        st.metric(
+            "PDF Pages",
+            len(pdf_pages)
+        )
+
+
+    with info3:
+
+        difference = (
+            len(df)
+            -
+            len(pdf_pages)
+        )
+
+        st.metric(
+            "Row / Page Difference",
+            difference
+        )
+
+
+    if len(df) == len(pdf_pages):
+
+        st.success(
+            "✅ Excel rows and PDF pages match."
+        )
+
+    else:
+
+        st.warning(
+            "⚠️ Excel rows and PDF pages do not have the "
+            "same count. Matching will use Page 1 → Excel "
+            "Row 2, Page 2 → Excel Row 3, etc."
+        )
+
+
+# =========================================================
 # COMPARE BUTTON
 # =========================================================
 
 if (
     excel_file
-    and pdf_file
-    and selected_fields
+    and
+    pdf_file
+    and
+    selected_fields
 ):
 
     st.markdown(
@@ -1470,13 +1923,14 @@ if (
         unsafe_allow_html=True
     )
 
+
     if st.button(
         "🔍  COMPARE & PROOFREAD",
         use_container_width=True
     ):
 
         with st.spinner(
-            "Checking PDF artwork..."
+            "Checking selected variable artwork data..."
         ):
 
             report = build_report(
@@ -1505,21 +1959,35 @@ if (
         pass_count = int(
             (
                 report["STATUS"]
-                == "PASS"
+                ==
+                "PASS"
             ).sum()
         )
+
 
         fail_count = int(
             (
                 report["STATUS"]
-                == "FAIL"
+                ==
+                "FAIL"
             ).sum()
         )
+
+
+        not_found_count = int(
+            (
+                report["STATUS"]
+                ==
+                "NOT FOUND"
+            ).sum()
+        )
+
 
         skip_count = int(
             (
                 report["STATUS"]
-                == "SKIP"
+                ==
+                "SKIP"
             ).sum()
         )
 
@@ -1528,8 +1996,8 @@ if (
         # SUMMARY
         # =================================================
 
-        col1, col2, col3 = st.columns(
-            3
+        col1, col2, col3, col4 = st.columns(
+            4
         )
 
 
@@ -1550,6 +2018,14 @@ if (
 
 
         with col3:
+
+            st.metric(
+                "NOT FOUND",
+                not_found_count
+            )
+
+
+        with col4:
 
             st.metric(
                 "IGNORED",
@@ -1590,15 +2066,77 @@ if (
         if fail_count > 0:
 
             st.error(
-                f"❌ FAIL — {fail_count} mismatch(es) detected."
+                f"❌ FAIL — {fail_count} variable-data mismatch(es) detected."
             )
+
+
+        elif not_found_count > 0:
+
+            st.warning(
+                f"⚠️ REVIEW — {not_found_count} selected variable "
+                f"field(s) could not be located."
+            )
+
 
         else:
 
             st.success(
-                "✅ PASS — All detected artwork fields matched. "
-                f"{skip_count} field(s) were not present in the PDF "
-                "and were ignored."
+                "✅ PASS — All selected variable fields "
+                "matched the PDF artwork."
+            )
+
+
+        # =================================================
+        # LOGIC EXPLANATION
+        # =================================================
+
+        with st.expander(
+            "ℹ️ How this validation works"
+        ):
+
+            st.write(
+                """
+                **Variable-data validation**
+
+                Only the fields selected from the Order Form are
+                treated as variable artwork data.
+
+                **Static PDF content is ignored.**
+
+                PDF bullets/keystrokes such as `n`, regional
+                prefixes, addresses, phone numbers and other
+                unselected static artwork content do not create
+                failures.
+
+                **Page mapping**
+
+                PDF Page 1 → Excel Row 2
+
+                PDF Page 2 → Excel Row 3
+
+                PDF Page 3 → Excel Row 4
+
+                and so on.
+
+                **Mismatch detection**
+
+                If the selected Order Form value is present in
+                the PDF → PASS.
+
+                If the expected value is absent but a relevant
+                alternative value is detected → FAIL.
+
+                Example:
+
+                Order Form: MADE IN CHINA
+
+                PDF: MADE IN VIETNAM
+
+                Result: FAIL — CHINA → VIETNAM
+
+                If an Order Form field is blank, that field is
+                not required and is ignored.
+                """
             )
 
 
@@ -1636,14 +2174,16 @@ if not excel_file:
         "Upload an Order Form to begin."
     )
 
+
 elif not pdf_file:
 
     st.caption(
         "Upload the PDF artwork to continue."
     )
 
+
 elif not selected_fields:
 
     st.caption(
-        "Select the fields you want to validate."
+        "Select the variable fields you want to validate."
     )

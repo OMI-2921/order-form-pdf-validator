@@ -215,6 +215,245 @@ st.markdown(
 )
 
 
+
+# =========================================================
+# APPLICATION NAVIGATION / HOME DASHBOARD
+# =========================================================
+
+st.markdown("""
+<style>
+.qc-dashboard {
+    background:
+      radial-gradient(circle at 10% 20%, rgba(26,139,255,.12), transparent 28%),
+      radial-gradient(circle at 90% 75%, rgba(139,76,255,.12), transparent 28%);
+}
+.qc-brandbar {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:.45rem 0 1rem;
+    border-bottom:1px solid rgba(90,130,190,.25);
+    margin-bottom:1.2rem;
+}
+.qc-brand {
+    font-size:1.45rem;
+    font-weight:900;
+    letter-spacing:.02em;
+    background:linear-gradient(90deg,#27a8ff,#ffffff);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+}
+.qc-small {
+    color:#73d4ff;
+    font-size:.76rem;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+}
+.qc-hero {
+    text-align:center;
+    padding:1.1rem 0 1.6rem;
+}
+.qc-kicker {
+    color:#b9c7dd;
+    font-size:1rem;
+}
+.qc-title {
+    font-size:clamp(2.2rem,5vw,4rem);
+    font-weight:900;
+    letter-spacing:-.04em;
+    margin:.1rem 0;
+}
+.qc-blue { color:#22a7ff; }
+.qc-white { color:#f7f9ff; }
+.qc-sub {
+    color:#aebbd0;
+    font-size:1rem;
+}
+.qc-card {
+    min-height:385px;
+    padding:1.35rem 1.15rem 1.1rem;
+    border-radius:22px;
+    background:linear-gradient(145deg,rgba(17,31,56,.94),rgba(5,12,26,.97));
+    border:1px solid rgba(120,150,195,.22);
+    box-shadow:0 18px 45px rgba(0,0,0,.25);
+    text-align:center;
+}
+.qc-card-blue { border-color:rgba(34,167,255,.72); }
+.qc-card-purple { border-color:rgba(155,92,255,.48); }
+.qc-card-green { border-color:rgba(57,230,165,.42); }
+.qc-card-orange { border-color:rgba(255,173,69,.42); }
+.qc-icon {
+    width:104px;height:104px;margin:.15rem auto 1rem;
+    border-radius:52px;display:flex;align-items:center;justify-content:center;
+    font-size:3rem;background:rgba(14,29,53,.92);
+    border:1px solid rgba(96,165,250,.30);
+    box-shadow:inset 0 0 28px rgba(59,130,246,.09);
+}
+.qc-card-title {
+    color:#f7f9ff;font-size:1.12rem;font-weight:850;line-height:1.3;
+    min-height:3.4rem;
+}
+.qc-card-desc {
+    color:#aebbd0;line-height:1.5;min-height:4.7rem;font-size:.91rem;
+}
+.qc-feature {
+    margin-top:1.3rem;padding:1rem;border-radius:16px;
+    background:rgba(12,24,43,.75);border:1px solid rgba(120,150,195,.18);
+    text-align:center;color:#b9c6db;
+}
+.qc-nav {
+    display:flex;align-items:center;justify-content:space-between;
+    padding:.35rem 0 1rem;border-bottom:1px solid rgba(90,130,190,.22);
+    margin-bottom:1rem;
+}
+.qc-screen-kicker {
+    color:#71d3ff;font-size:.75rem;font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;
+}
+.qc-screen-heading {
+    color:#f7f9ff;font-size:2.1rem;font-weight:900;line-height:1.15;
+}
+.qc-screen-sub {
+    color:#aebbd0;margin-top:.35rem;
+}
+.qc-workflow {
+    display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;
+    margin:.8rem 0 1.15rem;
+}
+.qc-step {
+    padding:.45rem .7rem;border-radius:999px;
+    background:rgba(18,35,61,.78);border:1px solid rgba(96,165,250,.2);
+    color:#c0ccdf;font-size:.78rem;font-weight:700;
+}
+.qc-step-active {
+    border-color:rgba(34,167,255,.55);
+    color:#dff5ff;
+}
+.qc-footer {
+    text-align:center;color:#75839b;font-size:.75rem;padding:1.3rem 0 .3rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
+if "qc_screen" not in st.session_state:
+    st.session_state["qc_screen"] = "home"
+
+if "qc_report" not in st.session_state:
+    st.session_state["qc_report"] = None
+
+# ---------------------------------------------------------
+# HOME DASHBOARD
+# ---------------------------------------------------------
+if st.session_state["qc_screen"] == "home":
+
+    st.markdown("""
+    <div class="qc-brandbar">
+        <div>
+            <div class="qc-brand">◈ QC PROOFREADER</div>
+            <div class="qc-small">Artwork Quality Control Platform</div>
+        </div>
+    </div>
+
+    <div class="qc-hero">
+        <div class="qc-kicker">Welcome to</div>
+        <div class="qc-title">
+            <span class="qc-blue">QC</span> <span class="qc-white">PROOFREADER</span>
+        </div>
+        <div class="qc-sub">Choose a quality-control tool to begin</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+
+    cards = [
+        ("qc-card-blue", "📊", "ORDER-FORM<br>TO OUTPUT-CHECK",
+         "Compare selected variable Order Form fields against final PDF artwork."),
+        ("qc-card-purple", "🔎", "ORIGINAL SPEC<br>TO OUTPUT CHECK",
+         "Validate final artwork against the Original Specification."),
+        ("qc-card-green", "🔄", "SPEC + ORDER FORM<br>+ OUTPUT CHECK",
+         "Use Original Spec and Order Form together for a complete QC check."),
+        ("qc-card-orange", "🛠️", "MORE QC<br>TOOLS",
+         "Additional QC utilities and validation workflows will be added here.")
+    ]
+
+    for idx, (cls, icon, title, desc) in enumerate(cards):
+        col = [c1,c2,c3,c4][idx]
+        with col:
+            st.markdown(f"""
+            <div class="qc-card {cls}">
+                <div class="qc-icon">{icon}</div>
+                <div class="qc-card-title">{title}</div>
+                <div class="qc-card-desc">{desc}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if idx == 0:
+                if st.button("🚀  START NOW  →", key="dashboard_start",
+                             use_container_width=True):
+                    st.session_state["qc_screen"] = "order_output"
+                    st.session_state["qc_report"] = None
+                    st.rerun()
+            else:
+                st.button("COMING SOON", key=f"dashboard_coming_{idx}",
+                          use_container_width=True, disabled=True)
+
+    st.markdown("""
+    <div class="qc-feature">
+        🛡️ <b>Accurate</b>&nbsp;&nbsp;&nbsp;&nbsp;
+        ⚡ <b>Fast</b>&nbsp;&nbsp;&nbsp;&nbsp;
+        🎯 <b>Reliable</b>&nbsp;&nbsp;&nbsp;&nbsp;
+        🔒 <b>Controlled</b>
+    </div>
+    <div class="qc-footer">QC Proofreader • Quality Control Platform</div>
+    """, unsafe_allow_html=True)
+
+    st.stop()
+
+# ---------------------------------------------------------
+# ORDER FORM → OUTPUT CHECK NAVIGATION
+# ---------------------------------------------------------
+nav_left, nav_mid, nav_right = st.columns([4, 1.5, 1.5])
+
+with nav_left:
+    st.markdown("""
+    <div class="qc-nav">
+        <div>
+            <div class="qc-brand">◈ QC PROOFREADER</div>
+            <div class="qc-screen-kicker">Order Form → Output Check</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with nav_mid:
+    if st.button("← HOME", key="screen_home", use_container_width=True):
+        st.session_state["qc_screen"] = "home"
+        st.rerun()
+
+with nav_right:
+    if st.button("🆕 NEW START", key="screen_new_start", use_container_width=True):
+        # Clear stored comparison/report state while returning to a clean tool screen.
+        for k in ["qc_report"]:
+            if k in st.session_state:
+                del st.session_state[k]
+        st.session_state["qc_screen"] = "order_output"
+        st.rerun()
+
+st.markdown("""
+<div class="qc-screen-kicker">SCREEN 01 · VARIABLE DATA VALIDATION</div>
+<div class="qc-screen-heading">
+    Order Form <span class="qc-blue">→</span> Output Check
+</div>
+<div class="qc-screen-sub">
+    Validate selected variable Order Form fields against the final PDF artwork.
+</div>
+<div class="qc-workflow">
+    <span class="qc-step qc-step-active">01 · PRODUCT TYPE</span>
+    <span class="qc-step">02 · UPLOAD FILES</span>
+    <span class="qc-step">03 · SELECT FIELDS</span>
+    <span class="qc-step">04 · COMPARE</span>
+</div>
+""", unsafe_allow_html=True)
+
 # =========================================================
 # TITLE
 # =========================================================

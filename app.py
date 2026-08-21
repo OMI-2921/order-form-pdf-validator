@@ -216,219 +216,6 @@ st.markdown(
 
 
 # =========================================================
-# APPLICATION NAVIGATION / HOME DASHBOARD
-# =========================================================
-
-if "screen" not in st.session_state:
-    st.session_state["screen"] = "home"
-
-if "reset_id" not in st.session_state:
-    st.session_state["reset_id"] = 0
-
-if "report" not in st.session_state:
-    st.session_state["report"] = None
-
-# ---------------------------------------------------------
-# HOME DASHBOARD THEME
-# ---------------------------------------------------------
-
-st.markdown(
-    """
-    <style>
-    .dashboard-wrap {
-        max-width: 1250px;
-        margin: 0 auto;
-        padding: 24px 10px 40px 10px;
-    }
-
-    .dashboard-kicker {
-        text-align: center;
-        color: #60a5fa !important;
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 3px;
-        text-transform: uppercase;
-        margin-top: 10px;
-    }
-
-    .dashboard-title {
-        text-align: center;
-        color: #ffffff !important;
-        font-size: 48px;
-        font-weight: 800;
-        letter-spacing: 1px;
-        margin: 4px 0 6px 0;
-    }
-
-    .dashboard-subtitle {
-        text-align: center;
-        color: #9ca3af !important;
-        font-size: 16px;
-        margin-bottom: 34px;
-    }
-
-    .tool-card {
-        min-height: 265px;
-        padding: 28px 24px 20px 24px;
-        border-radius: 20px;
-        border: 1px solid #303b4d;
-        background: linear-gradient(145deg, #151b26 0%, #0f141d 100%);
-        box-shadow: 0 14px 35px rgba(0,0,0,.28);
-        margin-bottom: 8px;
-    }
-
-    .tool-icon {
-        width: 58px;
-        height: 58px;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #172554;
-        border: 1px solid #2563eb;
-        color: #93c5fd;
-        font-size: 29px;
-        margin-bottom: 20px;
-    }
-
-    .tool-card h3 {
-        color: #ffffff !important;
-        font-size: 20px;
-        line-height: 1.25;
-        margin: 0 0 10px 0;
-    }
-
-    .tool-card p {
-        color: #9ca3af !important;
-        font-size: 14px;
-        line-height: 1.55;
-        min-height: 66px;
-        margin: 0;
-    }
-
-    .coming-card .tool-icon {
-        background: #211b31;
-        border-color: #7c3aed;
-        color: #c4b5fd;
-    }
-
-    .coming-badge {
-        display: inline-block;
-        margin-top: 12px;
-        padding: 5px 10px;
-        border-radius: 999px;
-        background: #27272a;
-        color: #a1a1aa !important;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .7px;
-    }
-
-    .feature-strip {
-        margin-top: 18px;
-        padding: 16px 20px;
-        border: 1px solid #263244;
-        border-radius: 16px;
-        background: #111827;
-        text-align: center;
-        color: #cbd5e1 !important;
-        font-size: 13px;
-    }
-
-    .feature-strip span {
-        margin: 0 18px;
-        color: #cbd5e1 !important;
-    }
-
-    .dashboard-footer {
-        text-align: center;
-        color: #64748b !important;
-        font-size: 12px;
-        margin-top: 26px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-
-def show_home():
-    st.markdown('<div class="dashboard-wrap">', unsafe_allow_html=True)
-    st.markdown('<div class="dashboard-kicker">QUALITY CONTROL PLATFORM</div>', unsafe_allow_html=True)
-    st.markdown('<div class="dashboard-title">QC PROOFREADER</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="dashboard-subtitle">Smart artwork validation for Order Forms, specifications and production output.</div>',
-        unsafe_allow_html=True
-    )
-
-    cards = [
-        (
-            "📄",
-            "ORDER-FORM<br>TO OUTPUT-CHECK",
-            "Validate selected variable Order Form data against PDF artwork, including panel-aware PFL checking.",
-            "active"
-        ),
-        (
-            "🔍",
-            "ORIGINAL SPEC<br>TO OUTPUT-CHECK",
-            "Compare production artwork directly against the approved original specification.",
-            "coming"
-        ),
-        (
-            "🔄",
-            "SPEC + ORDER FORM<br>+ OUTPUT CHECK",
-            "Cross-check the specification, Order Form and final output together in one workflow.",
-            "coming"
-        ),
-        (
-            "⚙️",
-            "MORE QC<br>TOOLS",
-            "Additional artwork and production-quality utilities can be added here later.",
-            "coming"
-        ),
-    ]
-
-    cols = st.columns(4, gap="large")
-    for col, (icon, title, description, state) in zip(cols, cards):
-        with col:
-            badge = "<div class=\"coming-badge\">COMING SOON</div>" if state == "coming" else ""
-            card_class = "tool-card coming-card" if state == "coming" else "tool-card"
-            st.markdown(
-                f'<div class="{card_class}">'
-                f'<div class="tool-icon">{icon}</div>'
-                f'<h3>{title}</h3>'
-                f'<p>{description}</p>'
-                f'{badge}'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-
-            if state == "active":
-                if st.button("🚀  START NOW", key="open_order_output", use_container_width=True):
-                    st.session_state["screen"] = "order_output"
-                    st.rerun()
-            else:
-                st.button("Coming Soon", key=f"soon_{title}", disabled=True, use_container_width=True)
-
-    st.markdown(
-        '<div class="feature-strip">'
-        '<span>✓ Accurate</span><span>⚡ Fast</span><span>◈ Field-Aware</span><span>✓ QC Focused</span>'
-        '</div>',
-        unsafe_allow_html=True
-    )
-    st.markdown(
-        '<div class="dashboard-footer">QC Proofreader • Artwork Quality Control</div>',
-        unsafe_allow_html=True
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
-if st.session_state["screen"] == "home":
-    show_home()
-    st.stop()
-
-
-# =========================================================
 # TITLE
 # =========================================================
 
@@ -443,47 +230,6 @@ st.markdown(
     '</div>',
     unsafe_allow_html=True
 )
-
-
-# =========================================================
-# TOOL NAVIGATION
-# =========================================================
-
-nav_left, nav_right = st.columns([1, 1])
-
-with nav_left:
-    if st.button("← HOME", key="back_home", use_container_width=True):
-        st.session_state["screen"] = "home"
-        st.rerun()
-
-with nav_right:
-    if st.button("🆕 NEW START", key="new_start", use_container_width=True):
-        st.session_state["reset_id"] += 1
-        st.session_state["report"] = None
-        st.rerun()
-
-
-# =========================================================
-# PRODUCT TYPE
-# =========================================================
-
-product_type = st.selectbox(
-    "Select Product Type",
-    options=[
-        "----- SELECT -----",
-        "PFL",
-        "HTL",
-        "Other"
-    ],
-    index=0,
-    help=(
-        "PFL = panelled artwork where variable data may continue across panels. "
-        "HTL / Other = standard continuous-data comparison."
-    )
-)
-
-if product_type == "----- SELECT -----":
-    st.info("Please select a Product Type before starting the comparison.")
 
 
 # =========================================================
@@ -1000,6 +746,273 @@ def create_pdf_blocks(page_text):
         unique.append(
             block
         )
+
+    return unique
+
+
+
+# =========================================================
+# PFL / PANELLED ARTWORK LOGIC
+# =========================================================
+#
+# PFL is treated differently from normal continuous artwork.
+# Panel numbers are used when they can be detected. The actual
+# panel number itself is removed from comparison content.
+#
+# The important behavior is that a variable field may continue
+# from one panel into the next panel. Therefore PFL creates
+# cross-panel comparison blocks from the complete panel sequence.
+# =========================================================
+
+def _panel_number_from_line(line):
+    """
+    Detect a panel sequence number from a line.
+
+    Supported examples:
+        1
+        01
+        PANEL 1
+        PANEL NO. 1
+        PANEL #1
+        PANEL-1
+
+    A bare number is accepted only when it is a small integer.
+    """
+    if not line:
+        return None
+
+    value = str(line).strip()
+
+    match = re.fullmatch(
+        r"(?:panel\s*(?:no\.?|number|#)?\s*[-:]?\s*)?(\d{1,3})",
+        value,
+        flags=re.IGNORECASE
+    )
+
+    if not match:
+        return None
+
+    number = int(match.group(1))
+
+    if 1 <= number <= 99:
+        return number
+
+    return None
+
+
+def split_pfl_panels(page_text):
+    """
+    Split PFL text into panel segments when panel numbers are
+    detectable.
+
+    If panel numbers are found in sequence, the segments are
+    sorted by panel number.
+
+    The function supports both common layouts:
+      1. panel number above panel content
+      2. panel number below panel content
+
+    If reliable panel numbering cannot be established, the
+    original PDF extraction order is retained.
+    """
+    if not page_text:
+        return []
+
+    raw_lines = page_text.splitlines()
+
+    lines = []
+
+    for raw_line in raw_lines:
+        line = clean_pdf_line(raw_line)
+
+        if not line:
+            continue
+
+        if len(line) > 1500:
+            continue
+
+        lines.append(line)
+
+    if not lines:
+        return []
+
+    markers = []
+
+    for index, line in enumerate(lines):
+        number = _panel_number_from_line(line)
+
+        if number is not None:
+            markers.append(
+                {
+                    "index": index,
+                    "number": number
+                }
+            )
+
+    # We need at least two distinct panel numbers and panel 1
+    # before using the panel-specific ordering logic.
+    distinct_numbers = []
+
+    for marker in markers:
+        if marker["number"] not in distinct_numbers:
+            distinct_numbers.append(marker["number"])
+
+    if len(distinct_numbers) < 2 or 1 not in distinct_numbers:
+        return lines
+
+    # Duplicate panel numbers are suspicious, so fall back to
+    # normal PDF extraction rather than making an unsafe reorder.
+    if len(distinct_numbers) != len(markers):
+        return lines
+
+    # Determine whether numbers are likely ABOVE or BELOW the
+    # panel content.
+    #
+    # If the first marker is very early, assume numbers are above.
+    # Otherwise, if there is meaningful content before the first
+    # marker, assume numbers are below.
+    first_marker_index = markers[0]["index"]
+
+    number_is_above = first_marker_index <= 1
+
+    segments = []
+
+    if number_is_above:
+        for position, marker in enumerate(markers):
+            start = marker["index"] + 1
+
+            if position + 1 < len(markers):
+                end = markers[position + 1]["index"]
+            else:
+                end = len(lines)
+
+            content = lines[start:end]
+
+            if content:
+                segments.append(
+                    {
+                        "number": marker["number"],
+                        "lines": content
+                    }
+                )
+
+    else:
+        # Number is probably below each panel.
+        start = 0
+
+        for marker in markers:
+            end = marker["index"]
+            content = lines[start:end]
+
+            if content:
+                segments.append(
+                    {
+                        "number": marker["number"],
+                        "lines": content
+                    }
+                )
+
+            start = marker["index"] + 1
+
+        # Anything after the last panel number is ambiguous.
+        # Keep it after the numbered panels rather than dropping it.
+        if start < len(lines):
+            segments.append(
+                {
+                    "number": 999999,
+                    "lines": lines[start:]
+                }
+            )
+
+    # Sort only when every real segment has a panel number.
+    if not segments:
+        return lines
+
+    segments.sort(
+        key=lambda item: item["number"]
+    )
+
+    ordered_lines = []
+
+    for segment in segments:
+        ordered_lines.extend(segment["lines"])
+
+    return ordered_lines
+
+
+def create_pfl_pdf_blocks(page_text):
+    """
+    Create comparison blocks for PFL.
+
+    Unlike the normal mode, PFL deliberately creates larger
+    adjacent-line blocks so content can continue across a panel
+    boundary.
+
+    Example:
+
+        Panel 1:
+        MACHINE WASH COLD WITH LIKE
+
+        Panel 2:
+        COLORS.
+
+    becomes a searchable continuous block:
+
+        MACHINE WASH COLD WITH LIKE COLORS.
+    """
+    ordered_lines = split_pfl_panels(page_text)
+
+    if not ordered_lines:
+        return []
+
+    blocks = []
+
+    # Individual lines remain available for short fields.
+    for line in ordered_lines:
+        blocks.append(line)
+
+    # Larger windows allow a field to cross from one panel into
+    # the next panel. A larger maximum is intentional for PFL.
+    maximum = min(
+        20,
+        len(ordered_lines)
+    )
+
+    for size in range(2, maximum + 1):
+        for start in range(
+            len(ordered_lines) - size + 1
+        ):
+            block = " ".join(
+                ordered_lines[
+                    start:start + size
+                ]
+            )
+
+            if block:
+                blocks.append(block)
+
+    # Also create one complete continuous sequence. This is useful
+    # when a long care/content value spans many lines/panels.
+    complete_sequence = " ".join(ordered_lines)
+
+    if complete_sequence:
+        blocks.append(complete_sequence)
+
+    # Remove duplicate normalized blocks.
+    unique = []
+    seen = set()
+
+    for block in blocks:
+        normalized = normalize_text(block)
+
+        if not normalized:
+            continue
+
+        if normalized in seen:
+            continue
+
+        seen.add(normalized)
+        unique.append(block)
 
     return unique
 
@@ -1763,79 +1776,6 @@ def check_field(
 
 
 # =========================================================
-# PFL PANEL SUPPORT
-# =========================================================
-
-def get_pfl_panel_blocks(page_text):
-    """
-    PFL mode treats panel-numbered artwork as a continuous stream.
-    Panel labels such as 1, 2, 3 or PANEL 1 / PANEL 2 are removed
-    from the comparison content. The extracted lines are then grouped
-    into larger blocks so text split at a panel boundary can be found.
-    """
-    if not page_text:
-        return []
-
-    raw_lines = page_text.splitlines()
-    cleaned = []
-
-    panel_pattern = re.compile(
-        r"^\s*(?:panel\s*)?(\d{1,3})\s*$",
-        re.IGNORECASE
-    )
-
-    for raw in raw_lines:
-        line = clean_pdf_line(raw)
-        if not line:
-            continue
-        if len(line) > 1500:
-            continue
-
-        # Ignore standalone panel sequence numbers.
-        if panel_pattern.match(line):
-            continue
-
-        # Ignore common textual panel labels.
-        if re.match(r"^\s*panel\s*[-#:]?\s*\d{1,3}\s*$", line, re.IGNORECASE):
-            continue
-
-        cleaned.append(line)
-
-    if not cleaned:
-        return []
-
-    blocks = list(cleaned)
-
-    # Larger windows are the important part for PFL because a value
-    # may begin near the end of one panel and continue into the next.
-    maximum = min(24, len(cleaned))
-
-    for size in range(2, maximum + 1):
-        for start in range(len(cleaned) - size + 1):
-            block = " ".join(cleaned[start:start + size])
-            if block:
-                blocks.append(block)
-
-    unique = []
-    seen = set()
-
-    for block in blocks:
-        normalized = normalize_text(block)
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        unique.append(block)
-
-    return unique
-
-
-def get_comparison_blocks(page_text, product_type):
-    if product_type == "PFL":
-        return get_pfl_panel_blocks(page_text)
-    return create_pdf_blocks(page_text)
-
-
-# =========================================================
 # BUILD REPORT
 #
 # PAGE 1 → EXCEL ROW 2
@@ -1847,7 +1787,7 @@ def build_report(
     df,
     pdf_pages,
     selected_fields,
-    product_type
+    product_type="Other"
 ):
 
     results = []
@@ -1906,13 +1846,20 @@ def build_report(
 
 
         # -------------------------------------------------
-        # Extract smart PDF blocks
+        # Extract PDF blocks according to Product Type
         # -------------------------------------------------
 
-        pdf_blocks = get_comparison_blocks(
-            page["text"],
-            product_type
-        )
+        if product_type == "PFL":
+            # PFL = panelled artwork. Panel sequence is detected
+            # and content is allowed to continue across panels.
+            pdf_blocks = create_pfl_pdf_blocks(
+                page["text"]
+            )
+        else:
+            # HTL / Other = existing continuous-data logic.
+            pdf_blocks = create_pdf_blocks(
+                page["text"]
+            )
 
 
         # -------------------------------------------------
@@ -2037,6 +1984,47 @@ def style_status(value):
 
 
 # =========================================================
+# PRODUCT TYPE
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">🏷️ Product Type</div>',
+    unsafe_allow_html=True
+)
+
+product_type = st.selectbox(
+    "Select Product Type",
+    options=[
+        "----- SELECT -----",
+        "PFL",
+        "HTL",
+        "Other"
+    ],
+    index=0,
+    help=(
+        "PFL = panelled artwork where variable data can continue "
+        "from one panel to another. HTL and Other use the normal "
+        "continuous-data comparison."
+    )
+)
+
+if product_type == "----- SELECT -----":
+    st.warning(
+        "⚠️ Please select a Product Type before starting the comparison."
+    )
+elif product_type == "PFL":
+    st.success(
+        "✓ PFL mode enabled — panel-aware comparison is active. "
+        "Variable data can continue across panel boundaries."
+    )
+else:
+    st.caption(
+        "Standard mode: PDF content is compared using the "
+        "existing continuous-data logic."
+    )
+
+
+# =========================================================
 # UPLOAD AREA
 # =========================================================
 
@@ -2062,7 +2050,7 @@ with left_column:
             "xlsx",
             "xls"
         ],
-        key=f"excel_upload_{st.session_state['reset_id']}"
+        key="excel_upload"
     )
 
 
@@ -2082,7 +2070,7 @@ with right_column:
         type=[
             "pdf"
         ],
-        key=f"pdf_upload_{st.session_state['reset_id']}"
+        key="pdf_upload"
     )
 
 
@@ -2249,194 +2237,262 @@ if (
     product_type != "----- SELECT -----"
 ):
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(
+        "<br>",
+        unsafe_allow_html=True
+    )
+
 
     if st.button(
         "🔍  COMPARE & PROOFREAD",
-        use_container_width=True,
-        key="compare_button"
+        use_container_width=True
     ):
 
         with st.spinner(
             "Checking selected variable artwork data..."
         ):
 
-            st.session_state["report"] = build_report(
+            report = build_report(
                 df,
                 pdf_pages,
                 selected_fields,
                 product_type
             )
 
-            st.session_state["report_product_type"] = product_type
 
+        # =================================================
+        # REPORT
+        # =================================================
 
-# =========================================================
-# SAVED REPORT
-#
-# Stored in session state so the report remains visible after
-# normal Streamlit reruns until NEW START is selected.
-# =========================================================
+        st.divider()
 
-report = st.session_state.get("report")
-
-if report is not None:
-
-    st.divider()
-
-    st.markdown(
-        '<div class="section-title">QC Report</div>',
-        unsafe_allow_html=True
-    )
-
-    report_product_type = st.session_state.get(
-        "report_product_type",
-        product_type
-    )
-
-    st.caption(
-        f"Comparison mode: {report_product_type}"
-    )
-
-    # =================================================
-    # COUNTS
-    # =================================================
-
-    pass_count = int(
-        (report["STATUS"] == "PASS").sum()
-    )
-
-    fail_count = int(
-        (report["STATUS"] == "FAIL").sum()
-    )
-
-    not_found_count = int(
-        (report["STATUS"] == "NOT FOUND").sum()
-    )
-
-    skip_count = int(
-        (report["STATUS"] == "SKIP").sum()
-    )
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("PASS", pass_count)
-
-    with col2:
-        st.metric("FAIL", fail_count)
-
-    with col3:
-        st.metric("NOT FOUND", not_found_count)
-
-    with col4:
-        st.metric("IGNORED", skip_count)
-
-    # =================================================
-    # REPORT TABLE
-    # =================================================
-
-    styled_report = (
-        report
-        .style
-        .map(
-            style_status,
-            subset=["STATUS"]
-        )
-    )
-
-    st.dataframe(
-        styled_report,
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # =================================================
-    # CONCLUSION
-    # =================================================
-
-    st.divider()
-
-    if fail_count > 0:
-        st.error(
-            f"❌ FAIL — {fail_count} variable-data mismatch(es) detected."
+        st.markdown(
+            '<div class="section-title">QC Report</div>',
+            unsafe_allow_html=True
         )
 
-    elif not_found_count > 0:
-        st.warning(
-            f"⚠️ REVIEW — {not_found_count} selected variable "
-            f"field(s) could not be located."
+
+        # =================================================
+        # COUNTS
+        # =================================================
+
+        pass_count = int(
+            (
+                report["STATUS"]
+                ==
+                "PASS"
+            ).sum()
         )
 
-    else:
-        st.success(
-            "✅ PASS — All selected variable fields matched the PDF artwork."
+
+        fail_count = int(
+            (
+                report["STATUS"]
+                ==
+                "FAIL"
+            ).sum()
         )
 
-    # =================================================
-    # LOGIC EXPLANATION
-    # =================================================
 
-    with st.expander("ℹ️ How this validation works"):
-        st.write(
-            """
-            **Variable-data validation**
-
-            Only the fields selected from the Order Form are treated as
-            variable artwork data.
-
-            **Static PDF content is ignored.**
-
-            PDF bullets/keystrokes such as `n`, regional prefixes,
-            addresses, phone numbers and other unselected static artwork
-            content do not create failures.
-
-            **Page mapping**
-
-            PDF Page 1 → Excel Row 2
-
-            PDF Page 2 → Excel Row 3
-
-            PDF Page 3 → Excel Row 4
-
-            and so on.
-
-            **PFL mode**
-
-            Panel-numbered artwork is treated as a continuous stream so
-            selected variable data can continue from one panel into the
-            next panel.
-
-            **Mismatch detection**
-
-            If the selected Order Form value is present in the PDF → PASS.
-
-            If the expected value is absent but a relevant alternative
-            value is detected → FAIL.
-
-            If an Order Form field is blank, that field is not required
-            and is ignored.
-            """
+        not_found_count = int(
+            (
+                report["STATUS"]
+                ==
+                "NOT FOUND"
+            ).sum()
         )
 
-    # =================================================
-    # DOWNLOAD REPORT
-    # =================================================
 
-    csv_data = (
-        report
-        .to_csv(index=False)
-        .encode("utf-8-sig")
-    )
+        skip_count = int(
+            (
+                report["STATUS"]
+                ==
+                "SKIP"
+            ).sum()
+        )
 
-    st.download_button(
-        label="⬇️ Download QC Report",
-        data=csv_data,
-        file_name="PDF_Proofreading_QC_Report.csv",
-        mime="text/csv",
-        use_container_width=True,
-        key="download_qc_report"
-    )
+
+        # =================================================
+        # SUMMARY
+        # =================================================
+
+        col1, col2, col3, col4 = st.columns(
+            4
+        )
+
+
+        with col1:
+
+            st.metric(
+                "PASS",
+                pass_count
+            )
+
+
+        with col2:
+
+            st.metric(
+                "FAIL",
+                fail_count
+            )
+
+
+        with col3:
+
+            st.metric(
+                "NOT FOUND",
+                not_found_count
+            )
+
+
+        with col4:
+
+            st.metric(
+                "IGNORED",
+                skip_count
+            )
+
+
+        # =================================================
+        # REPORT TABLE
+        # =================================================
+
+        styled_report = (
+            report
+            .style
+            .map(
+                style_status,
+                subset=[
+                    "STATUS"
+                ]
+            )
+        )
+
+
+        st.dataframe(
+            styled_report,
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+        # =================================================
+        # CONCLUSION
+        # =================================================
+
+        st.divider()
+
+
+        if fail_count > 0:
+
+            st.error(
+                f"❌ FAIL — {fail_count} variable-data mismatch(es) detected."
+            )
+
+
+        elif not_found_count > 0:
+
+            st.warning(
+                f"⚠️ REVIEW — {not_found_count} selected variable "
+                f"field(s) could not be located."
+            )
+
+
+        else:
+
+            st.success(
+                "✅ PASS — All selected variable fields "
+                "matched the PDF artwork."
+            )
+
+
+        # =================================================
+        # LOGIC EXPLANATION
+        # =================================================
+
+        with st.expander(
+            "ℹ️ How this validation works"
+        ):
+
+            st.write(
+                """
+                **Variable-data validation**
+
+                Only the fields selected from the Order Form are
+                treated as variable artwork data.
+
+                **Static PDF content is ignored.**
+
+                PDF bullets/keystrokes such as `n`, regional
+                prefixes, addresses, phone numbers and other
+                unselected static artwork content do not create
+                failures.
+
+                **Page mapping**
+
+                PDF Page 1 → Excel Row 2
+
+                PDF Page 2 → Excel Row 3
+
+                PDF Page 3 → Excel Row 4
+
+                and so on.
+
+                **Product Type**
+
+                **PFL:** Panel numbers are detected when possible.
+                Panel content is ordered by panel sequence and
+                adjacent panels are treated as continuous artwork,
+                so a selected variable field can continue from one
+                panel to the next.
+
+                **HTL / Other:** The existing standard PDF
+                comparison logic is used.
+
+                **Mismatch detection**
+
+                If the selected Order Form value is present in
+                the PDF → PASS.
+
+                If the expected value is absent but a relevant
+                alternative value is detected → FAIL.
+
+                Example:
+
+                Order Form: MADE IN CHINA
+
+                PDF: MADE IN VIETNAM
+
+                Result: FAIL — CHINA → VIETNAM
+
+                If an Order Form field is blank, that field is
+                not required and is ignored.
+                """
+            )
+
+
+        # =================================================
+        # DOWNLOAD REPORT
+        # =================================================
+
+        csv_data = (
+            report
+            .to_csv(
+                index=False
+            )
+            .encode(
+                "utf-8-sig"
+            )
+        )
+
+
+        st.download_button(
+            label="⬇️ Download QC Report",
+            data=csv_data,
+            file_name="PDF_Proofreading_QC_Report.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
 
 
 # =========================================================
@@ -2454,13 +2510,6 @@ elif not pdf_file:
 
     st.caption(
         "Upload the PDF artwork to continue."
-    )
-
-
-elif product_type == "----- SELECT -----":
-
-    st.caption(
-        "Select the Product Type to continue."
     )
 
 

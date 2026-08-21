@@ -1995,20 +1995,17 @@ st.markdown(
 product_type = st.selectbox(
     "Select Product Type",
     options=[
-        "----- SELECT -----",
         "PFL",
         "HTL",
         "Other"
     ],
-    index=0,
+    index=2,
     help=(
         "PFL = panelled artwork where variable data can continue "
-        "across panels. HTL / Other = standard continuous-data "
-        "comparison."
+        "from one panel to another. HTL and Other use the normal "
+        "continuous-data comparison."
     )
 )
-if product_type == "----- SELECT -----":
-    st.info("Please select a Product Type before starting the comparison.")
 
 if product_type == "PFL":
     st.caption(

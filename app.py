@@ -2007,6 +2007,8 @@ product_type = st.selectbox(
         "comparison."
     )
 )
+if product_type == "----- SELECT -----":
+    st.info("Please select a Product Type before starting the comparison.")
 
 if product_type == "PFL":
     st.caption(

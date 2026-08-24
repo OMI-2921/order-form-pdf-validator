@@ -169,8 +169,8 @@ html, body {
 }
 
 #viewer {
-    width: 900px;
-    height: 650px;
+    width: 1100px;
+    height: 750px;
     background: #ffffff;
     border: 1px solid #333;
     border-radius: 12px;

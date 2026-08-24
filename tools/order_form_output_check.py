@@ -3,19 +3,7 @@ import pandas as pd
 import fitz
 import re
 import unicodedata
-from io import BytesIO
 from rapidfuzz import fuzz
-
-
-# ==========================================================
-# CONFIG
-# ==========================================================
-
-st.set_page_config(
-    page_title="Order Form → Output Check",
-    page_icon="🔍",
-    layout="wide"
-)
 
 
 # ==========================================================
@@ -190,16 +178,17 @@ def normalize_unicode(value):
 
 def normalize_text(value):
     """
-    Aggressive comparison normalization.
+    Normalize text for comparison.
 
     Handles:
-    - case differences
+    - upper/lower case
+    - punctuation
     - commas
-    - full stops
+    - periods
     - hyphens
     - slashes
     - brackets
-    - multiple spaces
+    - extra spaces
     - line breaks
     """
 
@@ -216,9 +205,13 @@ def normalize_text(value):
 
 def compact_text(value):
     """
-    Even more aggressive comparison.
-    Removes spaces completely.
-    Useful when artwork combines values differently.
+    Removes spaces after normalization.
+
+    Example:
+        "MADE IN CHINA"
+        "MADEINCHINA"
+
+    become comparable.
     """
 
     value = normalize_text(value)
@@ -231,14 +224,24 @@ def compact_text(value):
 # ==========================================================
 
 def read_excel_file(uploaded_file):
+
+    if uploaded_file is None:
+        return pd.DataFrame()
+
     uploaded_file.seek(0)
 
     try:
+
         excel = pd.ExcelFile(uploaded_file)
 
-        # Prefer the first non-empty sheet
         for sheet in excel.sheet_names:
-            df = pd.read_excel(uploaded_file, sheet_name=sheet)
+
+            uploaded_file.seek(0)
+
+            df = pd.read_excel(
+                uploaded_file,
+                sheet_name=sheet
+            )
 
             if not df.empty:
                 return df
@@ -246,18 +249,28 @@ def read_excel_file(uploaded_file):
         return pd.DataFrame()
 
     except Exception as exc:
-        st.error(f"Unable to read Excel file: {exc}")
+
+        st.error(
+            f"Unable to read Excel file: {exc}"
+        )
+
         return pd.DataFrame()
 
 
 def clean_dataframe(df):
+
     df = df.copy()
 
-    # Remove completely empty rows/columns
-    df = df.dropna(axis=0, how="all")
-    df = df.dropna(axis=1, how="all")
+    df = df.dropna(
+        axis=0,
+        how="all"
+    )
 
-    # Convert headers to strings
+    df = df.dropna(
+        axis=1,
+        how="all"
+    )
+
     df.columns = [
         str(column).strip()
         for column in df.columns
@@ -270,37 +283,54 @@ def clean_dataframe(df):
 # FIELD DETECTION
 # ==========================================================
 
-def score_column_against_concept(column_name, aliases):
-    """
-    Finds how closely an Excel column name matches a field concept.
-    """
+def score_column_against_concept(
+    column_name,
+    aliases
+):
 
-    column = normalize_text(column_name)
+    column = normalize_text(
+        column_name
+    )
 
     best_score = 0
 
     for alias in aliases:
 
-        alias_normalized = normalize_text(alias)
+        alias_normalized = normalize_text(
+            alias
+        )
 
         if column == alias_normalized:
-            best_score = max(best_score, 100)
+
+            best_score = max(
+                best_score,
+                100
+            )
 
         elif alias_normalized in column:
-            best_score = max(best_score, 92)
+
+            best_score = max(
+                best_score,
+                92
+            )
 
         else:
+
             score = fuzz.token_set_ratio(
                 column,
                 alias_normalized
             )
 
-            best_score = max(best_score, score)
+            best_score = max(
+                best_score,
+                score
+            )
 
     return best_score
 
 
 def detect_field_mapping(df):
+
     mapping = {}
 
     for concept, aliases in FIELD_CONCEPTS.items():
@@ -316,10 +346,15 @@ def detect_field_mapping(df):
             )
 
             if score > best_score:
+
                 best_score = score
                 best_column = column
 
-        if best_column is not None and best_score >= 65:
+        if (
+            best_column is not None
+            and best_score >= 65
+        ):
+
             mapping[concept] = {
                 "column": best_column,
                 "score": best_score
@@ -333,17 +368,29 @@ def detect_field_mapping(df):
 # ==========================================================
 
 def extract_pdf_text(uploaded_pdf):
+
+    if uploaded_pdf is None:
+        return []
+
     uploaded_pdf.seek(0)
 
     pdf_bytes = uploaded_pdf.read()
 
-    document = fitz.open(stream=pdf_bytes, filetype="pdf")
+    document = fitz.open(
+        stream=pdf_bytes,
+        filetype="pdf"
+    )
 
     pages = []
 
-    for page_number, page in enumerate(document, start=1):
+    for page_number, page in enumerate(
+        document,
+        start=1
+    ):
 
-        text = page.get_text("text")
+        text = page.get_text(
+            "text"
+        )
 
         pages.append({
             "page": page_number,
@@ -356,6 +403,7 @@ def extract_pdf_text(uploaded_pdf):
 
 
 def combine_pdf_text(pages):
+
     return "\n".join(
         page["text"]
         for page in pages
@@ -366,15 +414,24 @@ def combine_pdf_text(pages):
 # EXCEL VALUE EXTRACTION
 # ==========================================================
 
-def get_column_values(df, column):
+def get_column_values(
+    df,
+    column
+):
+
     values = []
+
+    if column not in df.columns:
+        return values
 
     for value in df[column].tolist():
 
         if pd.isna(value):
             continue
 
-        value = normalize_unicode(value).strip()
+        value = normalize_unicode(
+            value
+        ).strip()
 
         if not value:
             continue
@@ -385,10 +442,6 @@ def get_column_values(df, column):
 
 
 def combine_values(values):
-    """
-    Order-form cells may contain multiple pieces of data.
-    Preserve all meaningful text.
-    """
 
     return " ".join(
         str(value)
@@ -401,20 +454,32 @@ def combine_values(values):
 # MATCHING
 # ==========================================================
 
-def direct_match(expected, artwork):
-    expected_normalized = normalize_text(expected)
-    artwork_normalized = normalize_text(artwork)
+def direct_match(
+    expected,
+    artwork
+):
+
+    expected_normalized = normalize_text(
+        expected
+    )
+
+    artwork_normalized = normalize_text(
+        artwork
+    )
 
     if not expected_normalized:
         return False
 
-    # Exact normalized phrase
     if expected_normalized in artwork_normalized:
         return True
 
-    # Compact comparison
-    expected_compact = compact_text(expected)
-    artwork_compact = compact_text(artwork)
+    expected_compact = compact_text(
+        expected
+    )
+
+    artwork_compact = compact_text(
+        artwork
+    )
 
     if expected_compact in artwork_compact:
         return True
@@ -422,9 +487,19 @@ def direct_match(expected, artwork):
     return False
 
 
-def fuzzy_match(expected, artwork, threshold=88):
-    expected_normalized = normalize_text(expected)
-    artwork_normalized = normalize_text(artwork)
+def fuzzy_match(
+    expected,
+    artwork,
+    threshold=88
+):
+
+    expected_normalized = normalize_text(
+        expected
+    )
+
+    artwork_normalized = normalize_text(
+        artwork
+    )
 
     if not expected_normalized:
         return False, 0
@@ -434,20 +509,28 @@ def fuzzy_match(expected, artwork, threshold=88):
         artwork_normalized
     )
 
-    return score >= threshold, score
+    return (
+        score >= threshold,
+        score
+    )
 
 
-def find_best_context(expected, artwork, window=180):
-    """
-    Returns a small portion of the PDF text around a likely match.
-    """
+def find_best_context(
+    expected,
+    artwork,
+    window=180
+):
 
-    expected_normalized = normalize_text(expected)
+    expected_normalized = normalize_text(
+        expected
+    )
 
     if not expected_normalized:
         return ""
 
-    artwork_normalized = normalize_text(artwork)
+    artwork_normalized = normalize_text(
+        artwork
+    )
 
     index = artwork_normalized.find(
         expected_normalized
@@ -456,13 +539,21 @@ def find_best_context(expected, artwork, window=180):
     if index == -1:
         return ""
 
-    start = max(0, index - window)
-    end = min(
-        len(artwork_normalized),
-        index + len(expected_normalized) + window
+    start = max(
+        0,
+        index - window
     )
 
-    return artwork_normalized[start:end]
+    end = min(
+        len(artwork_normalized),
+        index
+        + len(expected_normalized)
+        + window
+    )
+
+    return artwork_normalized[
+        start:end
+    ]
 
 
 # ==========================================================
@@ -470,25 +561,41 @@ def find_best_context(expected, artwork, window=180):
 # ==========================================================
 
 def is_french_field(field_name):
-    return "FRENCH" in field_name.upper()
+
+    return (
+        "FRENCH"
+        in field_name.upper()
+    )
 
 
 def is_english_field(field_name):
-    return "ENGLISH" in field_name.upper()
+
+    return (
+        "ENGLISH"
+        in field_name.upper()
+    )
 
 
-def clean_field_value(field_name, value):
-    """
-    Field-specific cleaning.
+def clean_field_value(
+    field_name,
+    value
+):
 
-    Keeps the actual variable value intact while
-    avoiding accidental mismatch caused by formatting.
-    """
+    value = normalize_unicode(
+        value
+    )
 
-    value = normalize_unicode(value)
+    if field_name in [
+        "SIZE",
+        "FIT",
+        "COLOR"
+    ]:
 
-    if field_name in ["SIZE", "FIT", "COLOR"]:
-        value = re.sub(r"\s+", " ", value)
+        value = re.sub(
+            r"\s+",
+            " ",
+            value
+        )
 
     return value.strip()
 
@@ -508,24 +615,31 @@ def build_validation_rows(
     for field_name in selected_fields:
 
         if field_name not in field_mapping:
+
             rows.append({
                 "field": field_name,
                 "column": "Not detected",
                 "expected": "",
                 "status": "NOT FOUND",
                 "confidence": 0,
-                "reason": "Matching column could not be detected."
+                "reason":
+                    "Matching column could not be detected."
             })
+
             continue
 
-        column = field_mapping[field_name]["column"]
+        column = field_mapping[
+            field_name
+        ]["column"]
 
         values = get_column_values(
             df,
             column
         )
 
-        expected = combine_values(values)
+        expected = combine_values(
+            values
+        )
 
         expected = clean_field_value(
             field_name,
@@ -545,7 +659,10 @@ def build_validation_rows(
 # VALIDATE
 # ==========================================================
 
-def validate_rows(rows, artwork_text):
+def validate_rows(
+    rows,
+    artwork_text
+):
 
     result_rows = []
 
@@ -560,7 +677,8 @@ def validate_rows(rows, artwork_text):
                 **row,
                 "status": "SKIPPED",
                 "confidence": 0,
-                "reason": "No usable value found in Order Form."
+                "reason":
+                    "No usable value found in Order Form."
             })
 
             continue
@@ -578,7 +696,8 @@ def validate_rows(rows, artwork_text):
                 **row,
                 "status": "PASS",
                 "confidence": 100,
-                "reason": "Order Form value found in output."
+                "reason":
+                    "Order Form value found in output."
             })
 
             continue
@@ -597,8 +716,12 @@ def validate_rows(rows, artwork_text):
             result_rows.append({
                 **row,
                 "status": "PASS",
-                "confidence": round(score, 1),
-                "reason": "High similarity match found in output."
+                "confidence": round(
+                    score,
+                    1
+                ),
+                "reason":
+                    "High similarity match found in output."
             })
 
         else:
@@ -606,8 +729,12 @@ def validate_rows(rows, artwork_text):
             result_rows.append({
                 **row,
                 "status": "FAIL",
-                "confidence": round(score, 1),
-                "reason": "Expected value was not found in output."
+                "confidence": round(
+                    score,
+                    1
+                ),
+                "reason":
+                    "Expected value was not found in output."
             })
 
     return result_rows
@@ -617,18 +744,25 @@ def validate_rows(rows, artwork_text):
 # DISPLAY RESULT
 # ==========================================================
 
-def display_results(result_rows):
+def display_results(
+    result_rows
+):
 
     if not result_rows:
-        st.warning("No fields were available for validation.")
-        return
 
+        st.warning(
+            "No fields were available for validation."
+        )
+
+        return
 
     # ======================================================
     # SUMMARY
     # ======================================================
 
-    total = len(result_rows)
+    total = len(
+        result_rows
+    )
 
     passed = sum(
         row["status"] == "PASS"
@@ -650,60 +784,62 @@ def display_results(result_rows):
         for row in result_rows
     )
 
-
     st.markdown("---")
 
-    st.subheader("Validation Result")
+    st.subheader(
+        "Validation Result"
+    )
 
-
-    # ------------------------------------------------------
+    # ======================================================
     # OVERALL RESULT
-    # ------------------------------------------------------
+    # ======================================================
 
     if failed == 0 and not_found == 0:
 
         st.success(
-            f"PASS — All selected fields matched the output."
+            "PASS — All selected fields matched the output."
         )
 
     else:
 
         st.error(
-            f"FAIL — {failed + not_found} selected field(s) "
-            f"require attention."
+            f"FAIL — {failed + not_found} "
+            "selected field(s) require attention."
         )
 
-
-    # ------------------------------------------------------
+    # ======================================================
     # SUMMARY METRICS
-    # ------------------------------------------------------
+    # ======================================================
 
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
+
         st.metric(
             "Selected Fields",
             total
         )
 
     with c2:
+
         st.metric(
             "PASS",
             passed
         )
 
     with c3:
+
         st.metric(
             "FAIL",
             failed
         )
 
     with c4:
+
         st.metric(
             "Skipped",
             skipped + not_found
         )
-
 
     # ======================================================
     # RESULT TABLE
@@ -726,16 +862,20 @@ def display_results(result_rows):
             "Details": row["reason"]
         })
 
-    result_df = pd.DataFrame(display_data)
+    result_df = pd.DataFrame(
+        display_data
+    )
 
+    # ======================================================
+    # RESULT STYLING
+    # ======================================================
 
-    # ------------------------------------------------------
-    # STYLE RESULT
-    # ------------------------------------------------------
-
-    def style_status(value):
+    def style_status(
+        value
+    ):
 
         if value == "PASS":
+
             return (
                 "background-color: #166534; "
                 "color: white; "
@@ -743,6 +883,7 @@ def display_results(result_rows):
             )
 
         if value == "FAIL":
+
             return (
                 "background-color: #991b1b; "
                 "color: white; "
@@ -755,18 +896,16 @@ def display_results(result_rows):
             "font-weight: bold;"
         )
 
-
-    styled = result_df.style.applymap(
+    styled = result_df.style.map(
         style_status,
         subset=["Result"]
     )
 
     st.dataframe(
         styled,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
-
 
     # ======================================================
     # FAILURE DETAILS
@@ -780,7 +919,9 @@ def display_results(result_rows):
 
     if failures:
 
-        st.markdown("### ⚠️ Fields Requiring Attention")
+        st.markdown(
+            "### ⚠️ Fields Requiring Attention"
+        )
 
         for row in failures:
 
@@ -815,45 +956,68 @@ def display_results(result_rows):
 
 def main():
 
+    # ======================================================
+    # TITLE
+    # ======================================================
+
     st.markdown(
         """
         <h1 style="margin-bottom:0;">
             Order Form → Output Check
         </h1>
+
         <p style="color:#94a3b8;">
-            Validate selected Order Form data against the final PDF artwork.
+            Validate selected Order Form data against
+            the final PDF artwork.
         </p>
         """,
         unsafe_allow_html=True
     )
 
-
     # ======================================================
     # NEW START
     # ======================================================
 
-    top_left, top_right = st.columns([6, 1])
+    top_left, top_right = st.columns(
+        [6, 1]
+    )
 
     with top_right:
 
         if st.button(
-    "↻ NEW START",
-    key="of_new_start"
-):
+            "↻ NEW START",
+            key="of_new_start"
+        ):
 
-    st.session_state["of_excel"] = None
-    st.session_state["of_pdf"] = None
-    st.session_state["of_selected_fields"] = []
-    st.session_state["of_product_type"] = "----- SELECT -----"
-    st.session_state["of_result"] = None
+            st.session_state[
+                "of_excel"
+            ] = None
 
-    st.rerun()
+            st.session_state[
+                "of_pdf"
+            ] = None
+
+            st.session_state[
+                "of_selected_fields"
+            ] = []
+
+            st.session_state[
+                "of_product_type"
+            ] = "----- SELECT -----"
+
+            st.session_state[
+                "of_result"
+            ] = None
+
+            st.rerun()
 
     # ======================================================
     # PRODUCT TYPE
     # ======================================================
 
-    st.markdown("### 1. Select Product Type")
+    st.markdown(
+        "### 1. Select Product Type"
+    )
 
     product_types = [
         "----- SELECT -----",
@@ -861,21 +1025,27 @@ def main():
         "PFL"
     ]
 
-current_product_type = st.session_state.get(
-    "of_product_type",
-    "----- SELECT -----"
-)
+    current_product_type = (
+        st.session_state.get(
+            "of_product_type",
+            "----- SELECT -----"
+        )
+    )
 
-if current_product_type not in product_types:
-    current_product_type = "----- SELECT -----"
+    if current_product_type not in product_types:
 
-product_type = st.selectbox(
-    "Product Type",
-    product_types,
-    index=product_types.index(current_product_type),
-    key="of_product_type"
-)
+        current_product_type = (
+            "----- SELECT -----"
+        )
 
+    product_type = st.selectbox(
+        "Product Type",
+        product_types,
+        index=product_types.index(
+            current_product_type
+        ),
+        key="of_product_type"
+    )
 
     if product_type == "----- SELECT -----":
 
@@ -883,14 +1053,17 @@ product_type = st.selectbox(
             "Select the product type before starting validation."
         )
 
-
     # ======================================================
     # UPLOADS
     # ======================================================
 
-    st.markdown("### 2. Upload Files")
+    st.markdown(
+        "### 2. Upload Files"
+    )
 
-    upload_col1, upload_col2 = st.columns(2)
+    upload_col1, upload_col2 = st.columns(
+        2
+    )
 
     with upload_col1:
 
@@ -908,15 +1081,14 @@ product_type = st.selectbox(
             key="of_pdf_upload"
         )
 
-
     if excel_file is None or pdf_file is None:
 
         st.info(
-            "Upload both the Order Form Excel and Output PDF to continue."
+            "Upload both the Order Form Excel and "
+            "Output PDF to continue."
         )
 
         return
-
 
     # ======================================================
     # READ EXCEL
@@ -934,40 +1106,37 @@ product_type = st.selectbox(
 
         return
 
-
-    df = clean_dataframe(df)
-
+    df = clean_dataframe(
+        df
+    )
 
     # ======================================================
-    # DETECT FIELDS
+    # DETECT FIELD MAPPING
     # ======================================================
 
     field_mapping = detect_field_mapping(
         df
     )
 
-
-    st.markdown("### 3. Select Fields to Validate")
-
-
-    # ------------------------------------------------------
-    # FIELD OPTIONS
-    # ------------------------------------------------------
+    st.markdown(
+        "### 3. Select Fields to Validate"
+    )
 
     available_concepts = []
 
     for concept in FIELD_CONCEPTS:
 
         if concept in field_mapping:
+
             available_concepts.append(
                 concept
             )
 
-
     if not available_concepts:
 
         st.error(
-            "No supported fields could be detected in the Order Form."
+            "No supported fields could be detected "
+            "in the Order Form."
         )
 
         st.write(
@@ -980,6 +1149,9 @@ product_type = st.selectbox(
 
         return
 
+    # ======================================================
+    # DEFAULT FIELDS
+    # ======================================================
 
     default_fields = [
         field
@@ -990,14 +1162,12 @@ product_type = st.selectbox(
         ]
     ]
 
-
     selected_fields = st.multiselect(
         "Select the Order Form fields you want to compare",
         options=available_concepts,
         default=default_fields,
         key="of_selected_fields"
     )
-
 
     # ======================================================
     # FIELD MAPPING PREVIEW
@@ -1011,12 +1181,15 @@ product_type = st.selectbox(
 
         for concept in available_concepts:
 
-            info = field_mapping[concept]
+            info = field_mapping[
+                concept
+            ]
 
             mapping_rows.append({
                 "Tool Field": concept,
                 "Excel Column": info["column"],
-                "Detection Confidence": f"{info['score']}%"
+                "Detection Confidence":
+                    f"{info['score']}%"
             })
 
         mapping_df = pd.DataFrame(
@@ -1025,10 +1198,9 @@ product_type = st.selectbox(
 
         st.dataframe(
             mapping_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
-
 
     # ======================================================
     # PRODUCT TYPE RULES
@@ -1047,13 +1219,13 @@ product_type = st.selectbox(
             "Standard mode is enabled."
         )
 
-
     # ======================================================
     # VALIDATION BUTTON
     # ======================================================
 
-    st.markdown("### 4. Run Validation")
-
+    st.markdown(
+        "### 4. Run Validation"
+    )
 
     if not selected_fields:
 
@@ -1063,18 +1235,15 @@ product_type = st.selectbox(
 
         return
 
-
     compare = st.button(
         "🔍  COMPARE ORDER FORM WITH OUTPUT",
         key="of_compare",
         type="primary",
-        use_container_width=True
+        width="stretch"
     )
-
 
     if not compare:
         return
-
 
     # ======================================================
     # EXTRACT PDF
@@ -1092,7 +1261,6 @@ product_type = st.selectbox(
             pdf_pages
         )
 
-
     if not artwork_text.strip():
 
         st.error(
@@ -1100,7 +1268,6 @@ product_type = st.selectbox(
         )
 
         return
-
 
     # ======================================================
     # BUILD EXPECTED VALUES
@@ -1111,7 +1278,6 @@ product_type = st.selectbox(
         selected_fields,
         field_mapping
     )
-
 
     # ======================================================
     # VALIDATE
@@ -1126,31 +1292,31 @@ product_type = st.selectbox(
             artwork_text
         )
 
-
     # ======================================================
     # SAVE RESULT
     # ======================================================
 
-    st.session_state.of_result = result_rows
-
+    st.session_state[
+        "of_result"
+    ] = result_rows
 
     # ======================================================
-    # DISPLAY
+    # DISPLAY RESULTS
     # ======================================================
 
     display_results(
         result_rows
     )
 
-
     # ======================================================
-    # PDF PAGE INFORMATION
+    # PDF INFORMATION
     # ======================================================
 
     st.markdown("---")
 
     st.caption(
-        f"Output PDF analyzed: {len(pdf_pages)} page(s)"
+        f"Output PDF analyzed: "
+        f"{len(pdf_pages)} page(s)"
     )
 
 

@@ -697,11 +697,6 @@ window.addEventListener(
 );
 
 
-setTimeout(
-    resizeCanvas,
-    100
-);
-
 </script>
 
 </body>

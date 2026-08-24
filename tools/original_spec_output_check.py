@@ -1,5 +1,5 @@
 import streamlit as st
-import fitz  # PyMuPDF
+import fitz
 from PIL import Image
 import io
 import base64
@@ -7,54 +7,10 @@ import streamlit.components.v1 as components
 
 
 # =========================================================
-# PAGE CONFIG
-# =========================================================
-
-st.set_page_config(
-    page_title="Original Spec to Output Check",
-    page_icon="🔍",
-    layout="wide"
-)
-
-
-# =========================================================
-# CUSTOM CSS
-# =========================================================
-
-st.markdown("""
-<style>
-
-.main-title {
-    text-align: center;
-    font-size: 32px;
-    font-weight: 700;
-    margin-bottom: 5px;
-}
-
-.sub-title {
-    text-align: center;
-    color: #8a8a8a;
-    margin-bottom: 25px;
-}
-
-/* Comparison Mode Buttons / Tabs */
-
-.mode-header {
-    text-align: center;
-    margin-bottom: 15px;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-
-# =========================================================
-# PDF FUNCTIONS
+# PDF HELPERS
 # =========================================================
 
 def get_pdf_page_count(uploaded_file):
-    """Return total pages in uploaded PDF."""
-
     pdf_bytes = uploaded_file.getvalue()
 
     doc = fitz.open(
@@ -63,14 +19,12 @@ def get_pdf_page_count(uploaded_file):
     )
 
     count = len(doc)
-
     doc.close()
 
     return count
 
 
 def pdf_page_to_image(uploaded_file, page_number=0, scale=2.0):
-    """Render PDF page as PIL image."""
 
     pdf_bytes = uploaded_file.getvalue()
 
@@ -79,8 +33,10 @@ def pdf_page_to_image(uploaded_file, page_number=0, scale=2.0):
         filetype="pdf"
     )
 
-    if page_number >= len(doc):
-        page_number = 0
+    page_number = min(
+        page_number,
+        len(doc) - 1
+    )
 
     page = doc.load_page(page_number)
 
@@ -103,33 +59,10 @@ def pdf_page_to_image(uploaded_file, page_number=0, scale=2.0):
 
 
 # =========================================================
-# IMAGE FUNCTIONS
+# IMAGE HELPERS
 # =========================================================
 
-def image_to_base64(image):
-    """Convert PIL image to base64 PNG."""
-
-    buffer = io.BytesIO()
-
-    image.save(
-        buffer,
-        format="PNG"
-    )
-
-    encoded = base64.b64encode(
-        buffer.getvalue()
-    ).decode("utf-8")
-
-    return encoded
-
-
-def create_monochrome(image, rgb_color):
-    """
-    Convert image into monochrome artwork.
-
-    White/light background becomes transparent.
-    Dark artwork becomes selected color.
-    """
+def create_monochrome(image, color):
 
     gray = image.convert("L")
 
@@ -141,17 +74,19 @@ def create_monochrome(image, rgb_color):
         (0, 0, 0, 0)
     )
 
+    r, g, b = color
+
     gray_pixels = gray.load()
     result_pixels = result.load()
 
-    r, g, b = rgb_color
-
     for y in range(height):
+
         for x in range(width):
 
             value = gray_pixels[x, y]
 
-            # White becomes transparent
+            # Dark artwork = visible
+            # White background = transparent
             alpha = 255 - value
 
             result_pixels[x, y] = (
@@ -164,8 +99,22 @@ def create_monochrome(image, rgb_color):
     return result
 
 
+def image_to_base64(image):
+
+    buffer = io.BytesIO()
+
+    image.save(
+        buffer,
+        format="PNG"
+    )
+
+    return base64.b64encode(
+        buffer.getvalue()
+    ).decode("utf-8")
+
+
 # =========================================================
-# INTERACTIVE COMPARISON VIEWER
+# COMPARISON VIEWER
 # =========================================================
 
 def comparison_viewer(
@@ -175,35 +124,17 @@ def comparison_viewer(
     blink_speed=0.5
 ):
 
-    # -----------------------------------------------------
-    # COLORS
-    # -----------------------------------------------------
-
-    # Dark professional red
-    ORIGINAL_RED = (170, 45, 45)
-
-    # Dark green (not neon)
-    OUTPUT_GREEN = (35, 120, 75)
-
-
-    # -----------------------------------------------------
-    # CREATE MONOCHROME IMAGES
-    # -----------------------------------------------------
-
+    # Dark Red
     original_mono = create_monochrome(
         original_image,
-        ORIGINAL_RED
+        (150, 40, 40)
     )
 
+    # Dark Green
     output_mono = create_monochrome(
         output_image,
-        OUTPUT_GREEN
+        (35, 110, 70)
     )
-
-
-    # -----------------------------------------------------
-    # CONVERT TO BASE64
-    # -----------------------------------------------------
 
     original_b64 = image_to_base64(
         original_mono
@@ -213,620 +144,576 @@ def comparison_viewer(
         output_mono
     )
 
+    # Use normal string replacement instead of f-string
+    # This prevents Python SyntaxErrors from JavaScript braces.
 
-    # -----------------------------------------------------
-    # HTML CANVAS VIEWER
-    # -----------------------------------------------------
+    html = """
+<!DOCTYPE html>
+<html>
 
-    html = f"""
-    <!DOCTYPE html>
-    <html>
+<head>
 
-    <head>
+<style>
 
-    <style>
+html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+}
 
-    html,
-    body {{
-        margin: 0;
-        padding: 0;
-        background: transparent;
-        overflow: hidden;
-    }}
+#wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
 
-    #viewer-wrapper {{
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }}
+#viewer {
+    width: 900px;
+    height: 650px;
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+}
 
-    #viewer {{
-        width: 900px;
-        height: 650px;
+#viewer:active {
+    cursor: grabbing;
+}
 
-        background: #000000;
+canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
 
-        border: 1px solid #333;
-        border-radius: 12px;
+#info {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(20,20,20,0.85);
+    color: #ddd;
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-family: Arial;
+    font-size: 12px;
+    pointer-events: none;
+}
 
-        overflow: hidden;
+#controls {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    background: rgba(20,20,20,0.9);
+    padding: 8px;
+    border-radius: 8px;
+}
 
-        position: relative;
+#controls button {
+    background: #252525;
+    color: white;
+    border: 1px solid #555;
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+}
 
-        cursor: grab;
+#controls button:hover {
+    background: #444;
+}
 
-        box-shadow:
-            0px 8px 30px rgba(0,0,0,0.45);
-    }}
+</style>
 
-    #viewer:active {{
-        cursor: grabbing;
-    }}
+</head>
 
-    canvas {{
-        width: 100%;
-        height: 100%;
+<body>
 
-        display: block;
-    }}
+<div id="wrapper">
 
-    .viewer-info {{
-        position: absolute;
+    <div id="viewer">
 
-        top: 12px;
-        left: 12px;
+        <canvas id="canvas"></canvas>
 
-        background: rgba(25,25,25,0.85);
+        <div id="info">
+            Loading...
+        </div>
 
-        color: #d5d5d5;
+        <div id="controls">
 
-        padding: 7px 12px;
+            <button id="zoomOut">−</button>
 
-        border-radius: 6px;
+            <button id="fit">FIT</button>
 
-        font-family: Arial;
+            <button id="zoomIn">+</button>
 
-        font-size: 12px;
-
-        pointer-events: none;
-    }}
-
-    .controls {{
-        position: absolute;
-
-        bottom: 12px;
-        left: 50%;
-
-        transform: translateX(-50%);
-
-        display: flex;
-
-        gap: 8px;
-
-        background: rgba(25,25,25,0.9);
-
-        padding: 8px;
-
-        border-radius: 8px;
-    }}
-
-    .controls button {{
-        background: #252525;
-
-        color: white;
-
-        border: 1px solid #555;
-
-        padding: 6px 12px;
-
-        border-radius: 5px;
-
-        cursor: pointer;
-    }}
-
-    .controls button:hover {{
-        background: #444;
-    }}
-
-    </style>
-
-    </head>
-
-
-    <body>
-
-    <div id="viewer-wrapper">
-
-        <div id="viewer">
-
-            <canvas id="canvas"></canvas>
-
-            <div class="viewer-info" id="info">
-                Loading comparison...
-            </div>
-
-            <div class="controls">
-
-                <button onclick="zoomOut()">−</button>
-
-                <button onclick="fitImage()">FIT</button>
-
-                <button onclick="zoomIn()">+</button>
-
-                <button onclick="resetView()">RESET</button>
-
-            </div>
+            <button id="reset">RESET</button>
 
         </div>
 
     </div>
 
+</div>
 
-    <script>
 
-    // =====================================================
-    // SETTINGS
-    // =====================================================
+<script>
 
-    const MODE = "{mode}";
+// =========================================================
+// SETTINGS
+// =========================================================
 
-    const BLINK_SPEED =
-        {blink_speed} * 1000;
+const MODE = "__MODE__";
 
+const BLINK_SPEED = __BLINK_SPEED__ * 1000;
 
-    // Both layers are 80% opacity
-    const ORIGINAL_OPACITY = 0.80;
+const ORIGINAL_OPACITY = 0.80;
 
-    const OUTPUT_OPACITY = 0.80;
+const OUTPUT_OPACITY = 0.80;
 
 
-    // =====================================================
-    // CANVAS
-    // =====================================================
+// =========================================================
+// CANVAS
+// =========================================================
 
-    const canvas =
-        document.getElementById("canvas");
+const viewer = document.getElementById("viewer");
 
-    const ctx =
-        canvas.getContext("2d");
+const canvas = document.getElementById("canvas");
 
+const ctx = canvas.getContext("2d");
 
-    const viewer =
-        document.getElementById("viewer");
+const info = document.getElementById("info");
 
 
-    function resizeCanvas() {{
+// =========================================================
+// IMAGES
+// =========================================================
 
-        const rect =
-            viewer.getBoundingClientRect();
+const original = new Image();
 
-        canvas.width =
-            rect.width;
+const output = new Image();
 
-        canvas.height =
-            rect.height;
+original.src =
+    "data:image/png;base64,__ORIGINAL_IMAGE__";
 
-        draw();
+output.src =
+    "data:image/png;base64,__OUTPUT_IMAGE__";
 
-    }}
+let loaded = 0;
 
 
-    // =====================================================
-    // IMAGES
-    // =====================================================
+// =========================================================
+// VIEW STATE
+// =========================================================
 
-    const original =
-        new Image();
+let scale = 1;
 
-    const output =
-        new Image();
+let offsetX = 0;
 
+let offsetY = 0;
 
-    original.src =
-        "data:image/png;base64,{original_b64}";
+let blinkShowOriginal = true;
 
 
-    output.src =
-        "data:image/png;base64,{output_b64}";
+// =========================================================
+// RESIZE
+// =========================================================
 
+function resizeCanvas() {
 
-    let loaded = 0;
+    const rect =
+        viewer.getBoundingClientRect();
 
+    canvas.width = rect.width;
 
-    function imageLoaded() {{
+    canvas.height = rect.height;
 
-        loaded++;
+    draw();
+}
 
-        if (loaded === 2) {{
 
-            fitImage();
+// =========================================================
+// FIT IMAGE
+// =========================================================
 
-            if (MODE === "blink") {{
+function fitImage() {
 
-                startBlink();
+    if (!original.width) return;
 
-            }}
+    const padding = 40;
 
-        }}
+    const scaleX =
+        (canvas.width - padding)
+        / original.width;
 
-    }}
+    const scaleY =
+        (canvas.height - padding)
+        / original.height;
 
+    scale =
+        Math.min(scaleX, scaleY);
 
-    original.onload =
-        imageLoaded;
+    offsetX =
+        (canvas.width -
+        original.width * scale) / 2;
 
-    output.onload =
-        imageLoaded;
+    offsetY =
+        (canvas.height -
+        original.height * scale) / 2;
 
+    draw();
+}
 
-    // =====================================================
-    // VIEW STATE
-    // =====================================================
 
-    let scale = 1;
+// =========================================================
+// DRAW
+// =========================================================
 
-    let offsetX = 0;
+function draw() {
 
-    let offsetY = 0;
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
 
+    ctx.fillStyle = "#000";
 
-    // =====================================================
-    // FIT IMAGE
-    // =====================================================
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
 
-    function fitImage() {{
 
-        if (!original.width) return;
+    // OVERLAY MODE
 
-        const padding = 40;
+    if (MODE === "overlay") {
 
-        const scaleX =
-            (canvas.width - padding) /
-            original.width;
+        ctx.globalAlpha =
+            ORIGINAL_OPACITY;
 
-        const scaleY =
-            (canvas.height - padding) /
-            original.height;
-
-        scale =
-            Math.min(scaleX, scaleY);
-
-        offsetX =
-            (canvas.width -
-            original.width * scale) / 2;
-
-        offsetY =
-            (canvas.height -
-            original.height * scale) / 2;
-
-        draw();
-
-    }}
-
-
-    function resetView() {{
-
-        fitImage();
-
-    }}
-
-
-    function zoomIn() {{
-
-        scale *= 1.25;
-
-        draw();
-
-    }}
-
-
-    function zoomOut() {{
-
-        scale /= 1.25;
-
-        draw();
-
-    }}
-
-
-    // =====================================================
-    // DRAW
-    // =====================================================
-
-    let blinkShowOriginal = true;
-
-
-    function draw() {{
-
-        ctx.clearRect(
-            0,
-            0,
-            canvas.width,
-            canvas.height
+        ctx.drawImage(
+            original,
+            offsetX,
+            offsetY,
+            original.width * scale,
+            original.height * scale
         );
 
 
-        ctx.fillStyle =
-            "#000000";
+        ctx.globalAlpha =
+            OUTPUT_OPACITY;
 
-        ctx.fillRect(
-            0,
-            0,
-            canvas.width,
-            canvas.height
+        ctx.drawImage(
+            output,
+            offsetX,
+            offsetY,
+            output.width * scale,
+            output.height * scale
         );
 
-
-        // -------------------------------------------------
-        // OVERLAY MODE
-        // -------------------------------------------------
-
-        if (MODE === "overlay") {{
-
-            ctx.globalAlpha =
-                ORIGINAL_OPACITY;
-
-            ctx.drawImage(
-                original,
-                offsetX,
-                offsetY,
-                original.width * scale,
-                original.height * scale
-            );
-
-
-            ctx.globalAlpha =
-                OUTPUT_OPACITY;
-
-            ctx.drawImage(
-                output,
-                offsetX,
-                offsetY,
-                output.width * scale,
-                output.height * scale
-            );
-
-        }}
-
-
-        // -------------------------------------------------
-        // BLINK MODE
-        // -------------------------------------------------
-
-        else if (MODE === "blink") {{
-
-            ctx.globalAlpha = 1;
-
-            const activeImage =
-                blinkShowOriginal
-                    ? original
-                    : output;
-
-            ctx.drawImage(
-                activeImage,
-                offsetX,
-                offsetY,
-                activeImage.width * scale,
-                activeImage.height * scale
-            );
-
-        }}
-
-
-        ctx.globalAlpha = 1;
-
-
-        document.getElementById("info").innerText =
-
-            MODE === "overlay"
-
-                ? "🟥 Original + 🟢 Output | " +
-                  Math.round(scale * 100) + "%"
-
-                : (blinkShowOriginal
-                    ? "🟥 ORIGINAL SPEC"
-                    : "🟢 OUTPUT")
-                  + " | "
-                  + Math.round(scale * 100) + "%";
-
+        info.innerText =
+            "🟥 ORIGINAL + 🟢 OUTPUT | "
+            + Math.round(scale * 100)
+            + "%";
     }
 
 
-    // =====================================================
-    // BLINK
-    // =====================================================
+    // BLINK MODE
 
-    function startBlink() {{
+    if (MODE === "blink") {
 
-        setInterval(() => {{
+        ctx.globalAlpha = 1;
 
-            blinkShowOriginal =
-                !blinkShowOriginal;
+        const activeImage =
+            blinkShowOriginal
+                ? original
+                : output;
 
-            draw();
+        ctx.drawImage(
+            activeImage,
+            offsetX,
+            offsetY,
+            activeImage.width * scale,
+            activeImage.height * scale
+        );
 
-        }}, BLINK_SPEED);
+        info.innerText =
+            blinkShowOriginal
+                ? "🟥 ORIGINAL SPEC"
+                : "🟢 OUTPUT";
 
-    }}
+        info.innerText +=
+            " | "
+            + Math.round(scale * 100)
+            + "%";
+    }
 
+    ctx.globalAlpha = 1;
+}
 
-    // =====================================================
-    // MOUSE WHEEL ZOOM
-    // =====================================================
 
-    viewer.addEventListener(
-        "wheel",
+// =========================================================
+// IMAGE LOADING
+// =========================================================
 
-        function(event) {{
+function onImageLoaded() {
 
-            event.preventDefault();
+    loaded++;
 
-            const zoomFactor =
-                event.deltaY < 0
-                    ? 1.12
-                    : 0.88;
-
-
-            const rect =
-                canvas.getBoundingClientRect();
-
-
-            const mouseX =
-                event.clientX -
-                rect.left;
-
-
-            const mouseY =
-                event.clientY -
-                rect.top;
-
-
-            // Keep mouse position stable
-            offsetX =
-                mouseX -
-                (mouseX - offsetX) *
-                zoomFactor;
-
-
-            offsetY =
-                mouseY -
-                (mouseY - offsetY) *
-                zoomFactor;
-
-
-            scale *= zoomFactor;
-
-
-            // Prevent extremely small zoom
-            scale =
-                Math.max(
-                    0.05,
-                    Math.min(scale, 20)
-                );
-
-
-            draw();
-
-        }},
-        {{ passive: false }}
-    );
-
-
-    // =====================================================
-    // DRAG / PAN
-    // =====================================================
-
-    let dragging = false;
-
-    let lastX = 0;
-
-    let lastY = 0;
-
-
-    viewer.addEventListener(
-        "mousedown",
-
-        function(event) {{
-
-            dragging = true;
-
-            lastX =
-                event.clientX;
-
-            lastY =
-                event.clientY;
-
-        }}
-    );
-
-
-    window.addEventListener(
-        "mousemove",
-
-        function(event) {{
-
-            if (!dragging)
-                return;
-
-
-            const dx =
-                event.clientX -
-                lastX;
-
-
-            const dy =
-                event.clientY -
-                lastY;
-
-
-            offsetX += dx;
-
-            offsetY += dy;
-
-
-            lastX =
-                event.clientX;
-
-            lastY =
-                event.clientY;
-
-
-            draw();
-
-        }}
-    );
-
-
-    window.addEventListener(
-        "mouseup",
-
-        function() {{
-
-            dragging = false;
-
-        }}
-    );
-
-
-    // =====================================================
-    // DOUBLE CLICK = FIT
-    // =====================================================
-
-    viewer.addEventListener(
-        "dblclick",
-
-        function() {{
-
-            fitImage();
-
-        }}
-    );
-
-
-    // =====================================================
-    // INITIALIZE
-    // =====================================================
-
-    window.addEventListener(
-        "resize",
-        resizeCanvas
-    );
-
-
-    setTimeout(() => {{
+    if (loaded === 2) {
 
         resizeCanvas();
 
-    }}, 100);
+        fitImage();
+
+        if (MODE === "blink") {
+
+            setInterval(function() {
+
+                blinkShowOriginal =
+                    !blinkShowOriginal;
+
+                draw();
+
+            }, BLINK_SPEED);
+        }
+    }
+}
+
+original.onload = onImageLoaded;
+
+output.onload = onImageLoaded;
 
 
-    </script>
+// =========================================================
+// ZOOM
+// =========================================================
 
-    </body>
+viewer.addEventListener(
+    "wheel",
 
-    </html>
-    """
+    function(event) {
+
+        event.preventDefault();
+
+        const factor =
+            event.deltaY < 0
+                ? 1.12
+                : 0.88;
+
+        const rect =
+            canvas.getBoundingClientRect();
+
+        const mouseX =
+            event.clientX - rect.left;
+
+        const mouseY =
+            event.clientY - rect.top;
+
+        offsetX =
+            mouseX -
+            (mouseX - offsetX)
+            * factor;
+
+        offsetY =
+            mouseY -
+            (mouseY - offsetY)
+            * factor;
+
+        scale *= factor;
+
+        scale =
+            Math.max(
+                0.05,
+                Math.min(scale, 20)
+            );
+
+        draw();
+
+    },
+
+    { passive: false }
+);
+
+
+// =========================================================
+// PAN
+// =========================================================
+
+let dragging = false;
+
+let lastX = 0;
+
+let lastY = 0;
+
+
+viewer.addEventListener(
+    "mousedown",
+
+    function(event) {
+
+        dragging = true;
+
+        lastX = event.clientX;
+
+        lastY = event.clientY;
+
+    }
+);
+
+
+window.addEventListener(
+    "mousemove",
+
+    function(event) {
+
+        if (!dragging) return;
+
+        const dx =
+            event.clientX - lastX;
+
+        const dy =
+            event.clientY - lastY;
+
+        offsetX += dx;
+
+        offsetY += dy;
+
+        lastX = event.clientX;
+
+        lastY = event.clientY;
+
+        draw();
+
+    }
+);
+
+
+window.addEventListener(
+    "mouseup",
+
+    function() {
+
+        dragging = false;
+
+    }
+);
+
+
+// =========================================================
+// BUTTONS
+// =========================================================
+
+document
+    .getElementById("zoomIn")
+    .addEventListener(
+        "click",
+
+        function() {
+
+            scale *= 1.25;
+
+            draw();
+
+        }
+    );
+
+
+document
+    .getElementById("zoomOut")
+    .addEventListener(
+        "click",
+
+        function() {
+
+            scale /= 1.25;
+
+            draw();
+
+        }
+    );
+
+
+document
+    .getElementById("fit")
+    .addEventListener(
+        "click",
+
+        fitImage
+    );
+
+
+document
+    .getElementById("reset")
+    .addEventListener(
+        "click",
+
+        fitImage
+    );
+
+
+// =========================================================
+// DOUBLE CLICK
+// =========================================================
+
+viewer.addEventListener(
+    "dblclick",
+
+    function() {
+
+        fitImage();
+
+    }
+);
+
+
+// =========================================================
+// START
+// =========================================================
+
+window.addEventListener(
+    "resize",
+    resizeCanvas
+);
+
+
+setTimeout(
+    resizeCanvas,
+    100
+);
+
+</script>
+
+</body>
+</html>
+"""
+
+    html = html.replace(
+        "__MODE__",
+        str(mode)
+    )
+
+    html = html.replace(
+        "__BLINK_SPEED__",
+        str(blink_speed)
+    )
+
+    html = html.replace(
+        "__ORIGINAL_IMAGE__",
+        original_b64
+    )
+
+    html = html.replace(
+        "__OUTPUT_IMAGE__",
+        output_b64
+    )
 
     components.html(
         html,
@@ -836,7 +723,7 @@ def comparison_viewer(
 
 
 # =========================================================
-# DATA CHECK PLACEHOLDER
+# DATA CHECK
 # =========================================================
 
 def data_check_view():
@@ -844,91 +731,59 @@ def data_check_view():
     st.subheader("🔍 Data Check")
 
     st.info(
-        "This section will identify text differences between "
-        "the Original Spec and Output."
+        "Automatic text and difference validation "
+        "will be added here next."
     )
 
-    st.markdown("""
-    ### Classification Logic
-
-    **STATIC** → Must match exactly, including:
-
-    - Spelling
-    - Words
-    - Commas
-    - Periods
-    - Punctuation
-
-    **VARIABLE** → Data is allowed to change.
-
-    **IGNORE** → Excluded from validation.
-    """)
-
     st.selectbox(
-        "Difference Type",
+        "Difference Classification",
         [
             "Select Type",
             "STATIC",
             "VARIABLE",
             "IGNORE"
         ],
-        key="data_type"
+        key="spec_data_classification"
     )
 
 
 # =========================================================
-# MAIN
+# MAIN FUNCTION
 # =========================================================
 
 def main():
 
-    # -----------------------------------------------------
-    # TITLE
-    # -----------------------------------------------------
+    st.title("🔍 ORIGINAL SPEC TO OUTPUT CHECK")
 
-    st.markdown(
-        '<div class="main-title">'
-        '🔍 ORIGINAL SPEC TO OUTPUT CHECK'
-        '</div>',
-        unsafe_allow_html=True
+    st.caption(
+        "Visual comparison between Original Specification and Final Output"
     )
 
-    st.markdown(
-        '<div class="sub-title">'
-        'Visual and Data Comparison'
-        '</div>',
-        unsafe_allow_html=True
-    )
+    st.divider()
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # UPLOADS
-    # -----------------------------------------------------
+    # =====================================================
 
     col1, col2 = st.columns(2)
-
 
     with col1:
 
         original_spec = st.file_uploader(
             "📄 Upload Original Spec",
             type=["pdf"],
-            key="original_spec_file"
+            key="original_spec_upload"
         )
-
 
     with col2:
 
         output_file = st.file_uploader(
             "📄 Upload Output",
             type=["pdf"],
-            key="output_file"
+            key="output_spec_upload"
         )
 
-
-    # -----------------------------------------------------
-    # WAIT FOR FILES
-    # -----------------------------------------------------
 
     if not original_spec or not output_file:
 
@@ -939,9 +794,9 @@ def main():
         return
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # PAGE COUNTS
-    # -----------------------------------------------------
+    # =====================================================
 
     original_pages = get_pdf_page_count(
         original_spec
@@ -951,24 +806,24 @@ def main():
         output_file
     )
 
-
     max_pages = min(
         original_pages,
         output_pages
     )
 
 
-    # -----------------------------------------------------
-    # PAGE SELECTOR
-    # -----------------------------------------------------
+    # =====================================================
+    # PAGE SELECTION
+    # =====================================================
 
     if max_pages > 1:
 
         page_number = st.selectbox(
             "Select Page",
-            list(range(max_pages)),
+            options=list(range(max_pages)),
             format_func=lambda x:
-                f"Page {x + 1}"
+                f"Page {x + 1}",
+            key="spec_page_selector"
         )
 
     else:
@@ -976,17 +831,19 @@ def main():
         page_number = 0
 
 
-    # -----------------------------------------------------
-    # COMPARE BUTTON
-    # -----------------------------------------------------
+    # =====================================================
+    # COMPARE
+    # =====================================================
 
     if st.button(
         "🔍 COMPARE",
-        use_container_width=True,
-        type="primary"
+        type="primary",
+        use_container_width=True
     ):
 
-        st.session_state["spec_compare_started"] = True
+        st.session_state[
+            "spec_compare_started"
+        ] = True
 
 
     if not st.session_state.get(
@@ -997,9 +854,9 @@ def main():
         return
 
 
-    # -----------------------------------------------------
-    # RENDER PDF PAGES
-    # -----------------------------------------------------
+    # =====================================================
+    # RENDER
+    # =====================================================
 
     with st.spinner(
         "Preparing comparison..."
@@ -1018,29 +875,25 @@ def main():
         )
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # MODES
-    # -----------------------------------------------------
+    # =====================================================
 
     overlay_tab, blink_tab, data_tab = st.tabs([
-
         "🟥🟢 OVERLAY",
         "👁 BLINK",
         "🔍 DATA CHECK"
-
     ])
 
 
-    # =====================================================
     # OVERLAY
-    # =====================================================
 
     with overlay_tab:
 
         st.caption(
-            "Original Spec = dark red | "
-            "Output = dark green | "
-            "Both = 80% opacity"
+            "Original = Dark Red | "
+            "Output = Dark Green | "
+            "80% opacity"
         )
 
         comparison_viewer(
@@ -1050,32 +903,18 @@ def main():
         )
 
 
-    # =====================================================
     # BLINK
-    # =====================================================
 
     with blink_tab:
 
         blink_speed = st.slider(
-
             "⚡ Blink Speed (seconds)",
-
             min_value=0.25,
-
             max_value=2.0,
-
             value=0.5,
-
-            step=0.25
-
+            step=0.25,
+            key="blink_speed"
         )
-
-
-        st.caption(
-            f"Switching Original ↔ Output every "
-            f"{blink_speed} seconds"
-        )
-
 
         comparison_viewer(
             original_image,
@@ -1085,9 +924,7 @@ def main():
         )
 
 
-    # =====================================================
     # DATA CHECK
-    # =====================================================
 
     with data_tab:
 

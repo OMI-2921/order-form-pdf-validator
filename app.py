@@ -62,28 +62,18 @@ st.markdown("""
     display: inline-block;
     padding: 7px 16px;
     border-radius: 30px;
-
     background: rgba(33, 150, 243, 0.12);
-
     border: 1px solid rgba(96, 165, 250, 0.35);
-
     color: #93c5fd;
-
     font-size: 13px;
     font-weight: 700;
-
     letter-spacing: 1px;
 }
 
-
 .main-title {
-
     font-size: 46px;
-
     font-weight: 800;
-
     margin-top: 20px;
-
     margin-bottom: 10px;
 
     background: linear-gradient(
@@ -94,17 +84,12 @@ st.markdown("""
     );
 
     -webkit-background-clip: text;
-
     -webkit-text-fill-color: transparent;
 }
 
-
 .main-subtitle {
-
     color: #aeb8c7;
-
     font-size: 17px;
-
     margin-bottom: 45px;
 }
 
@@ -114,7 +99,6 @@ st.markdown("""
 ========================================================== */
 
 .tool-card {
-
     position: relative;
 
     height: 340px;
@@ -144,9 +128,7 @@ st.markdown("""
         box-shadow 0.35s ease;
 }
 
-
 .tool-card:hover {
-
     transform: translateY(-8px);
 
     border:
@@ -162,11 +144,9 @@ st.markdown("""
 ========================================================== */
 
 .vector-circle {
-
     position: absolute;
 
     width: 150px;
-
     height: 150px;
 
     border-radius: 50%;
@@ -179,23 +159,18 @@ st.markdown("""
         );
 
     right: -45px;
-
     top: -45px;
 
     filter: blur(1px);
 }
 
-
 .vector-grid {
-
     position: absolute;
 
     width: 140px;
-
     height: 140px;
 
     right: -30px;
-
     bottom: -40px;
 
     opacity: 0.12;
@@ -215,15 +190,12 @@ st.markdown("""
 ========================================================== */
 
 .tool-icon {
-
     width: 70px;
-
     height: 70px;
 
     display: flex;
 
     align-items: center;
-
     justify-content: center;
 
     border-radius: 20px;
@@ -253,7 +225,6 @@ st.markdown("""
 ========================================================== */
 
 .tool-number {
-
     color: #60a5fa;
 
     font-size: 12px;
@@ -265,9 +236,7 @@ st.markdown("""
     margin-bottom: 10px;
 }
 
-
 .tool-title {
-
     color: white;
 
     font-size: 21px;
@@ -279,9 +248,7 @@ st.markdown("""
     margin-bottom: 14px;
 }
 
-
 .tool-description {
-
     color: #aab4c3;
 
     font-size: 14px;
@@ -295,7 +262,6 @@ st.markdown("""
 ========================================================== */
 
 div.stButton > button {
-
     width: 100%;
 
     min-height: 48px;
@@ -321,9 +287,7 @@ div.stButton > button {
     transition: all 0.25s ease;
 }
 
-
 div.stButton > button:hover {
-
     transform: translateY(-2px);
 
     border-color: #ffffff !important;
@@ -338,7 +302,6 @@ div.stButton > button:hover {
 ========================================================== */
 
 .dashboard-footer {
-
     text-align: center;
 
     margin-top: 55px;
@@ -354,7 +317,6 @@ div.stButton > button:hover {
 ========================================================== */
 
 .back-title {
-
     font-size: 18px;
 
     font-weight: 700;
@@ -382,9 +344,11 @@ if "selected_tool" not in st.session_state:
 
 def show_dashboard():
 
-    # Header
+    # ======================================================
+    # HEADER
+    # ======================================================
 
-    st.markdown("""
+    st.markdown(dedent("""
     <div style="text-align:center;">
 
         <div class="system-badge">
@@ -400,7 +364,7 @@ def show_dashboard():
         </div>
 
     </div>
-    """, unsafe_allow_html=True)
+    """), unsafe_allow_html=True)
 
 
     # ======================================================
@@ -410,13 +374,13 @@ def show_dashboard():
     col1, col2, col3, col4 = st.columns(4, gap="medium")
 
 
-    # ------------------------------------------------------
+    # ======================================================
     # TOOL 1
-    # ------------------------------------------------------
+    # ======================================================
 
     with col1:
 
-        st.markdown("""
+        st.markdown(dedent("""
         <div class="tool-card">
 
             <div class="vector-circle"></div>
@@ -444,7 +408,7 @@ def show_dashboard():
             </div>
 
         </div>
-        """, unsafe_allow_html=True)
+        """), unsafe_allow_html=True)
 
         if st.button(
             "OPEN TOOL  →",
@@ -454,13 +418,13 @@ def show_dashboard():
             st.rerun()
 
 
-    # ------------------------------------------------------
+    # ======================================================
     # TOOL 2
-    # ------------------------------------------------------
+    # ======================================================
 
     with col2:
 
-        st.markdown("""
+        st.markdown(dedent("""
         <div class="tool-card">
 
             <div class="vector-circle"></div>
@@ -488,7 +452,7 @@ def show_dashboard():
             </div>
 
         </div>
-        """, unsafe_allow_html=True)
+        """), unsafe_allow_html=True)
 
         if st.button(
             "OPEN TOOL  →",
@@ -498,13 +462,13 @@ def show_dashboard():
             st.rerun()
 
 
-    # ------------------------------------------------------
+    # ======================================================
     # TOOL 3
-    # ------------------------------------------------------
+    # ======================================================
 
     with col3:
 
-        st.markdown("""
+        st.markdown(dedent("""
         <div class="tool-card">
 
             <div class="vector-circle"></div>
@@ -531,7 +495,7 @@ def show_dashboard():
             </div>
 
         </div>
-        """, unsafe_allow_html=True)
+        """), unsafe_allow_html=True)
 
         if st.button(
             "OPEN TOOL  →",
@@ -541,13 +505,13 @@ def show_dashboard():
             st.rerun()
 
 
-    # ------------------------------------------------------
+    # ======================================================
     # TOOL 4
-    # ------------------------------------------------------
+    # ======================================================
 
     with col4:
 
-        st.markdown("""
+        st.markdown(dedent("""
         <div class="tool-card">
 
             <div class="vector-circle"></div>
@@ -574,7 +538,7 @@ def show_dashboard():
             </div>
 
         </div>
-        """, unsafe_allow_html=True)
+        """), unsafe_allow_html=True)
 
         if st.button(
             "EXPLORE TOOLS  →",
@@ -584,15 +548,17 @@ def show_dashboard():
             st.rerun()
 
 
-    # Footer
+    # ======================================================
+    # FOOTER
+    # ======================================================
 
-    st.markdown("""
+    st.markdown(dedent("""
     <div class="dashboard-footer">
 
         SELECT A TOOL TO START YOUR QUALITY CONTROL PROCESS
 
     </div>
-    """, unsafe_allow_html=True)
+    """), unsafe_allow_html=True)
 
 
 # ==========================================================
@@ -608,7 +574,9 @@ def show_selected_tool():
     st.divider()
 
 
+    # ======================================================
     # TOOL 1
+    # ======================================================
 
     if st.session_state.selected_tool == "order_form":
 
@@ -616,7 +584,9 @@ def show_selected_tool():
         main()
 
 
+    # ======================================================
     # TOOL 2
+    # ======================================================
 
     elif st.session_state.selected_tool == "original_spec":
 
@@ -624,7 +594,9 @@ def show_selected_tool():
         main()
 
 
+    # ======================================================
     # TOOL 3
+    # ======================================================
 
     elif st.session_state.selected_tool == "spec_order_output":
 
@@ -632,7 +604,9 @@ def show_selected_tool():
         main()
 
 
+    # ======================================================
     # TOOL 4
+    # ======================================================
 
     elif st.session_state.selected_tool == "more_qc":
 

@@ -19,20 +19,23 @@ st.set_page_config(
 
 
 # ==========================================================
-# SESSION STATE
+# SESSION STATE INITIALIZATION
 # ==========================================================
 
-DEFAULT_STATE = {
-    "of_excel": None,
-    "of_pdf": None,
-    "of_selected_fields": [],
-    "of_product_type": "----- SELECT -----",
-    "of_result": None,
-}
+if "of_excel" not in st.session_state:
+    st.session_state["of_excel"] = None
 
-for key, value in DEFAULT_STATE.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+if "of_pdf" not in st.session_state:
+    st.session_state["of_pdf"] = None
+
+if "of_selected_fields" not in st.session_state:
+    st.session_state["of_selected_fields"] = []
+
+if "of_product_type" not in st.session_state:
+    st.session_state["of_product_type"] = "----- SELECT -----"
+
+if "of_result" not in st.session_state:
+    st.session_state["of_result"] = None
 
 
 # ==========================================================
@@ -834,15 +837,17 @@ def main():
     with top_right:
 
         if st.button(
-            "↻ NEW START",
-            key="of_new_start"
-        ):
+    "↻ NEW START",
+    key="of_new_start"
+):
 
-            for key, value in DEFAULT_STATE.items():
-                st.session_state[key] = value
+    st.session_state["of_excel"] = None
+    st.session_state["of_pdf"] = None
+    st.session_state["of_selected_fields"] = []
+    st.session_state["of_product_type"] = "----- SELECT -----"
+    st.session_state["of_result"] = None
 
-            st.rerun()
-
+    st.rerun()
 
     # ======================================================
     # PRODUCT TYPE
@@ -856,14 +861,20 @@ def main():
         "PFL"
     ]
 
-    product_type = st.selectbox(
-        "Product Type",
-        product_types,
-        index=product_types.index(
-            st.session_state.of_product_type
-        ),
-        key="of_product_type"
-    )
+current_product_type = st.session_state.get(
+    "of_product_type",
+    "----- SELECT -----"
+)
+
+if current_product_type not in product_types:
+    current_product_type = "----- SELECT -----"
+
+product_type = st.selectbox(
+    "Product Type",
+    product_types,
+    index=product_types.index(current_product_type),
+    key="of_product_type"
+)
 
 
     if product_type == "----- SELECT -----":

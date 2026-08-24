@@ -171,7 +171,7 @@ html, body {
 #viewer {
     width: 900px;
     height: 650px;
-    background: #606060;
+    background: #ffffff;
     border: 1px solid #333;
     border-radius: 12px;
     position: relative;
@@ -381,7 +381,7 @@ function draw() {
         canvas.height
     );
 
-    ctx.fillStyle = "#606060";
+    ctx.fillStyle = "#ffffff";
 
     ctx.fillRect(
         0,

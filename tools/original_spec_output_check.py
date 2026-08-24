@@ -171,7 +171,7 @@ html, body {
 #viewer {
     width: 900px;
     height: 650px;
-    background: #000;
+    background: #606060;
     border: 1px solid #333;
     border-radius: 12px;
     position: relative;
@@ -381,7 +381,7 @@ function draw() {
         canvas.height
     );
 
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = "#606060";
 
     ctx.fillRect(
         0,
@@ -469,28 +469,41 @@ function onImageLoaded() {
 
     if (loaded === 2) {
 
-        resizeCanvas();
+        // Wait briefly so the Streamlit component
+        // receives its final width and height.
+        setTimeout(function() {
 
-        fitImage();
+            resizeCanvas();
 
-        if (MODE === "blink") {
+            // Start every mode centered and fitted
+            fitImage();
 
-            setInterval(function() {
+            // Make sure Blink always starts
+            // from the centered Original Spec.
+            blinkShowOriginal = true;
 
-                blinkShowOriginal =
-                    !blinkShowOriginal;
+            draw();
 
-                draw();
+            // Start blink only after correct positioning
+            if (MODE === "blink") {
 
-            }, BLINK_SPEED);
-        }
+                setInterval(function() {
+
+                    blinkShowOriginal =
+                        !blinkShowOriginal;
+
+                    draw();
+
+                }, BLINK_SPEED);
+            }
+
+        }, 200);
     }
 }
 
 original.onload = onImageLoaded;
 
 output.onload = onImageLoaded;
-
 
 // =========================================================
 // ZOOM

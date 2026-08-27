@@ -7,19 +7,1330 @@ from rapidfuzz import fuzz
 from difflib import SequenceMatcher
 
 
+def normalize_text(text):
+
+    if text is None:
+        return ""
+
+    text = str(text)
+
+    text = unicodedata.normalize(
+        "NFKC",
+        text
+    )
+
+    text = text.lower()
+
+    # -----------------------------------------------------
+    # Normalize common PDF characters
+    # -----------------------------------------------------
+
+    text = text.replace("’", "'")
+    text = text.replace("`", "'")
+    text = text.replace("–", "-")
+    text = text.replace("—", "-")
+
+    # -----------------------------------------------------
+    # PDF line breaks
+    # -----------------------------------------------------
+
+    text = text.replace("\n", " ")
+    text = text.replace("\r", " ")
+
+    # -----------------------------------------------------
+    # IMPORTANT:
+    #
+    # The PDF may extract bullets as "n".
+    # We DO NOT want that "n" to become real content.
+    # -----------------------------------------------------
+
+    text = re.sub(
+        r"(^|\s)n(?=\s)",
+        " ",
+        text
+    )
+
+    # -----------------------------------------------------
+    # Separators
+    # -----------------------------------------------------
+
+    text = re.sub(
+        r"[,.;:|/\\]+",
+        " ",
+        text
+    )
+
+    text = re.sub(
+        r"-+",
+        " ",
+        text
+    )
+
+    # -----------------------------------------------------
+    # Remove remaining punctuation
+    # -----------------------------------------------------
+
+    text = re.sub(
+        r"[^\w%#'\s]",
+        " ",
+        text
+    )
+
+    # -----------------------------------------------------
+    # Apostrophe differences ignored
+    # -----------------------------------------------------
+
+    text = text.replace(
+        "'",
+        ""
+    )
+
+    # -----------------------------------------------------
+    # Multiple spaces
+    # -----------------------------------------------------
+
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
+
+    return text.strip()
+
+
+def compact_text(text):
+
+    return normalize_text(
+        text
+    ).replace(
+        " ",
+        ""
+    )
+
+
+def tokenize(text):
+
+    value = normalize_text(
+        text
+    )
+
+    if not value:
+        return []
+
+    return value.split()
+
+
 # =========================================================
-# PAGE CONFIGURATION
+# FIELD TYPE DETECTION
+#
+# This is NOT deciding what to check.
+# The user-selected field is always checked.
+#
+# This only helps us locate the correct variable
+# information inside the PDF.
 # =========================================================
 
-st.set_page_config(
-    page_title="PDF Proofreader",
-    page_icon="🔍",
-    layout="wide",
+
+def get_field_type(field_name):
+
+    field = normalize_text(field_name)
+
+    compact = (
+        field
+        .replace(" ", "")
+        .replace("_", "")
+        .replace("-", "")
+    )
+
+    # RN / Registration Number — check early so it cannot
+    # accidentally be classified as a general field.
+    if (
+        compact in {"rn", "rnno", "rnnumber"}
+        or compact.startswith("rnno")
+        or compact.startswith("rnnumber")
+        or "registrationnumber" in compact
+        or "companyrn" in compact
+    ):
+        return "RN"
+
+    # Country of Origin
+    if (
+        "coo" in compact
+        or "countryoforigin" in compact
+        or "countryorigin" in compact
+        or "madein" in compact
+        or compact == "origin"
+        or compact.endswith("origin")
+    ):
+        return "COO"
+
+    # Fiber / Fabric / Content
+    if (
+        "fiber" in compact
+        or "fibre" in compact
+        or "fabric" in compact
+        or "content" in compact
+        or "composition" in compact
+        or "fabrication" in compact
+    ):
+        return "CONTENT"
+
+    # Care / Washing
+    if (
+        "care" in compact
+        or "wash" in compact
+        or "washing" in compact
+        or "laundry" in compact
+        or "instruction" in compact
+    ):
+        return "CARE"
+
+    # Size — includes OSZ / size-line fields
+    if (
+        "size" in compact
+        or compact.startswith("osz")
+        or "sizeline" in compact
+        or "alpha" in compact
+        or "waist" in compact
+        or "inseam" in compact
+        or "fit" in compact
+    ):
+        return "SIZE"
+
+    if "brand" in compact:
+        return "BRAND"
+
+    if "color" in compact or "colour" in compact:
+        return "COLOR"
+
+    if "gender" in compact:
+        return "GENDER"
+
+    if (
+        "attribute" in compact
+        or "technology" in compact
+        or "feature" in compact
+        or "description" in compact
+    ):
+        return "ATTRIBUTE"
+
+    return "GENERAL"
+
+# =========================================================
+# FIELD LANGUAGE / REGION DETECTION
+# =========================================================
+
+def get_field_region(field_name):
+
+    field = normalize_text(
+        field_name
+    )
+
+    compact = field.replace(
+        " ",
+        ""
+    )
+
+    # English
+
+    if (
+        "_en" in str(field_name).lower()
+        or compact.endswith("en")
+        or "english" in compact
+    ):
+
+        return "EN"
+
+
+    # French / Canada
+
+    if (
+        "_fr" in str(field_name).lower()
+        or compact.endswith("fr")
+        or "french" in compact
+        or "canada" in compact
+    ):
+
+        return "FR"
+
+
+    # Spanish
+
+    if (
+        "_sp" in str(field_name).lower()
+        or compact.endswith("sp")
+        or "spanish" in compact
+        or "espanol" in compact
+        or "span" in compact
+    ):
+
+        return "SP"
+
+
+    return ""
+
+
+# =========================================================
+# LOAD EXCEL
+# =========================================================
+
+def load_excel(file):
+
+    file.seek(0)
+
+    df = pd.read_excel(
+        file,
+        header=0
+    )
+
+    df.columns = [
+        str(column).strip()
+        for column in df.columns
+    ]
+
+    return df
+
+
+# =========================================================
+# LOAD PDF
+# =========================================================
+
+def load_pdf(file):
+
+    file.seek(0)
+
+    pdf_bytes = file.read()
+
+    document = fitz.open(
+        stream=pdf_bytes,
+        filetype="pdf"
+    )
+
+    pages = []
+
+    for page_number, page in enumerate(
+        document
+    ):
+
+        text = page.get_text(
+            "text"
+        )
+
+        pages.append(
+            {
+                "page": page_number + 1,
+                "text": text
+            }
+        )
+
+    document.close()
+
+    return pages
+
+
+# =========================================================
+# CLEAN PDF LINE
+# =========================================================
+
+def clean_pdf_line(line):
+
+    if not line:
+        return ""
+
+    line = str(line).strip()
+
+    # -----------------------------------------------------
+    # Remove PDF bullet/keystroke "n"
+    #
+    # Examples:
+    #
+    # n US :
+    # n CA :
+    # n MX :
+    #
+    # becomes:
+    #
+    # US :
+    # CA :
+    # MX :
+    # -----------------------------------------------------
+
+    line = re.sub(
+        r"^\s*n\s+(?=[A-Za-z])",
+        "",
+        line
+    )
+
+    return line.strip()
+
+
+# =========================================================
+# CREATE SMART PDF BLOCKS
+# =========================================================
+
+def create_pdf_blocks(page_text):
+
+    if not page_text:
+        return []
+
+    raw_lines = page_text.splitlines()
+
+    lines = []
+
+    for raw_line in raw_lines:
+
+        line = clean_pdf_line(
+            raw_line
+        )
+
+        if not line:
+            continue
+
+        if len(line) > 1500:
+            continue
+
+        lines.append(
+            line
+        )
+
+
+    if not lines:
+        return []
+
+
+    blocks = []
+
+
+    # -----------------------------------------------------
+    # INDIVIDUAL LINES
+    #
+    # Important because many variable fields are contained
+    # inside one PDF line.
+    # -----------------------------------------------------
+
+    for line in lines:
+
+        blocks.append(
+            line
+        )
+
+
+    # -----------------------------------------------------
+    # ADJACENT LINE BLOCKS
+    #
+    # Used for wrapped care/content text.
+    # -----------------------------------------------------
+
+    maximum = min(
+        8,
+        len(lines)
+    )
+
+    for size in range(
+        2,
+        maximum + 1
+    ):
+
+        for start in range(
+            len(lines) - size + 1
+        ):
+
+            block = " ".join(
+                lines[
+                    start:start + size
+                ]
+            )
+
+            if block:
+
+                blocks.append(
+                    block
+                )
+
+
+    # -----------------------------------------------------
+    # Full page is deliberately NOT used as the primary
+    # comparison block.
+    #
+    # This prevents unrelated static/regional information
+    # from being mixed with variable data.
+    # -----------------------------------------------------
+
+
+    # -----------------------------------------------------
+    # Remove duplicates
+    # -----------------------------------------------------
+
+    unique = []
+
+    seen = set()
+
+    for block in blocks:
+
+        normalized = normalize_text(
+            block
+        )
+
+        if not normalized:
+            continue
+
+        if normalized in seen:
+            continue
+
+        seen.add(
+            normalized
+        )
+
+        unique.append(
+            block
+        )
+
+    return unique
+
+
+# =========================================================
+# EXACT MATCH
+# =========================================================
+
+
+def exact_match(expected, actual):
+
+    expected_normalized = normalize_text(expected)
+    actual_normalized = normalize_text(actual)
+
+    if not expected_normalized or not actual_normalized:
+        return False
+
+    expected_tokens = tokenize(expected)
+    actual_tokens = tokenize(actual)
+
+    if not expected_tokens:
+        return False
+
+    # -----------------------------------------------------
+    # SHORT / SINGLE-TOKEN VALUES
+    #
+    # Examples:
+    # 2, 4, 8, S, M, L, XL, XXL
+    #
+    # These MUST be standalone tokens. This prevents:
+    # 2  -> matching RN# 55285
+    # 8  -> matching 55285
+    # M  -> matching MADE
+    # -----------------------------------------------------
+    if len(expected_tokens) == 1:
+        expected_value = expected_tokens[0]
+
+        if (
+            expected_value.isdigit()
+            or len(expected_value) <= 4
+        ):
+            return expected_value in actual_tokens
+
+    # -----------------------------------------------------
+    # NORMAL CASE-INSENSITIVE / SEPARATOR-TOLERANT MATCH
+    # -----------------------------------------------------
+    if expected_normalized in actual_normalized:
+        return True
+
+    # Space-independent match is only safe for meaningful
+    # multi-character values.
+    expected_compact = compact_text(expected)
+    actual_compact = compact_text(actual)
+
+    if (
+        expected_compact
+        and len(expected_compact) > 4
+        and expected_compact in actual_compact
+    ):
+        return True
+
+    return False
+
+
+def get_match_key(value):
+
+    normalized = normalize_text(value)
+
+    if not normalized:
+        return ""
+
+    tokens = tokenize(value)
+
+    if len(tokens) == 1:
+        return f"TOKEN:{tokens[0]}"
+
+    return f"TEXT:{normalized}"
+
+# =========================================================
+# EXPECTED VALUE SEARCH
+# =========================================================
+
+
+def search_exact_value(expected, pdf_blocks, used_block_keys=None):
+    if used_block_keys is None:
+        used_block_keys = set()
+
+    expected_key = get_match_key(expected)
+
+    for block in pdf_blocks:
+        block_key = normalize_text(block)
+
+        if not block_key or block_key in used_block_keys:
+            continue
+
+        if exact_match(expected, block):
+            return {
+                "status": "PASS",
+                "pdf": block,
+                "difference": "—",
+                "score": 100,
+                "match_key": expected_key,
+                "block_key": block_key
+            }
+
+    return None
+
+# =========================================================
+# FIELD ANCHORS
+#
+# These help us locate the relevant variable value.
+# They prevent static information from being treated as
+# a mismatch.
+# =========================================================
+
+FIELD_ANCHORS = {
+
+    "COO": [
+        "made in",
+        "hecho en",
+        "fabrique en",
+        "madein"
+    ],
+
+    "CONTENT": [
+        "shell",
+        "liner",
+        "body",
+        "fabric",
+        "fiber",
+        "fibre",
+        "content",
+        "composition",
+        "exterior",
+        "extérieur",
+        "forro",
+        "doublure"
+    ],
+
+    "CARE": [
+        "machine wash",
+        "wash",
+        "lavar",
+        "laver",
+        "dry clean",
+        "bleach",
+        "blanchiment",
+        "detergent",
+        "detergente"
+    ],
+
+    "RN": [
+        "rn",
+        "ca"
+    ],
+
+    "SIZE": [
+        "size"
+    ],
+
+    "COLOR": [
+        "color",
+        "colour"
+    ],
+
+    "BRAND": [
+        "brand"
+    ],
+
+    "GENDER": [
+        "girls",
+        "boys",
+        "women",
+        "men",
+        "unisex"
+    ],
+
+    "ATTRIBUTE": [
+        "attribute",
+        "technology",
+        "feature"
+    ],
+
+    "GENERAL": []
+}
+
+
+# =========================================================
+# CHECK IF BLOCK IS RELEVANT TO FIELD
+# =========================================================
+
+def is_relevant_block(
+    block,
+    field_type,
+    field_name,
+    expected
+):
+
+    normalized_block = normalize_text(
+        block
+    )
+
+    if not normalized_block:
+        return False
+
+
+    # -----------------------------------------------------
+    # Field-specific anchors
+    # -----------------------------------------------------
+
+    anchors = FIELD_ANCHORS.get(
+        field_type,
+        []
+    )
+
+
+    for anchor in anchors:
+
+        anchor_norm = normalize_text(
+            anchor
+        )
+
+        if (
+            anchor_norm
+            and
+            anchor_norm in normalized_block
+        ):
+
+            return True
+
+
+    # -----------------------------------------------------
+    # Language-specific clues
+    #
+    # Only used when the selected field name explicitly
+    # indicates a language.
+    # -----------------------------------------------------
+
+    region = get_field_region(
+        field_name
+    )
+
+
+    if region == "EN":
+
+        english_markers = [
+            "made in",
+            "machine wash",
+            "shell",
+            "liner",
+            "polyester",
+            "span dex",
+            "bleach"
+        ]
+
+        for marker in english_markers:
+
+            if normalize_text(marker) in normalized_block:
+
+                return True
+
+
+    if region == "FR":
+
+        french_markers = [
+            "laver",
+            "machine",
+            "extérieur",
+            "doublure",
+            "polyester",
+            "élasthanne",
+            "sans chlore"
+        ]
+
+        for marker in french_markers:
+
+            if normalize_text(marker) in normalized_block:
+
+                return True
+
+
+    if region == "SP":
+
+        spanish_markers = [
+            "lavar",
+            "máquina",
+            "maquina",
+            "cuerpo",
+            "forro",
+            "poliéster",
+            "poliester",
+            "cloro",
+            "hecho en"
+        ]
+
+        for marker in spanish_markers:
+
+            if normalize_text(marker) in normalized_block:
+
+                return True
+
+
+    return False
+
+
+# =========================================================
+# TOKEN OVERLAP
+# =========================================================
+
+def token_overlap(
+    expected,
+    actual
+):
+
+    expected_tokens = set(
+        tokenize(expected)
+    )
+
+    actual_tokens = set(
+        tokenize(actual)
+    )
+
+    if not expected_tokens:
+        return 0
+
+    common = (
+        expected_tokens
+        &
+        actual_tokens
+    )
+
+    return (
+        len(common)
+        /
+        len(expected_tokens)
+    )
+
+
+# =========================================================
+# DIFFERENCE
+# =========================================================
+
+def get_difference(
+    expected,
+    actual
+):
+
+    expected_tokens = tokenize(
+        expected
+    )
+
+    actual_tokens = tokenize(
+        actual
+    )
+
+    if not expected_tokens:
+        return "Content differs."
+
+    if not actual_tokens:
+        return "Expected value is missing from PDF."
+
+    matcher = SequenceMatcher(
+        None,
+        expected_tokens,
+        actual_tokens
+    )
+
+    differences = []
+
+    for tag, a1, a2, b1, b2 in matcher.get_opcodes():
+
+        if tag == "equal":
+            continue
+
+
+        expected_part = " ".join(
+            expected_tokens[a1:a2]
+        )
+
+        actual_part = " ".join(
+            actual_tokens[b1:b2]
+        )
+
+
+        if tag == "replace":
+
+            differences.append(
+                f"{expected_part} → {actual_part}"
+            )
+
+
+        elif tag == "delete":
+
+            differences.append(
+                f"Missing: {expected_part}"
+            )
+
+
+        elif tag == "insert":
+
+            # IMPORTANT:
+            #
+            # Extra static PDF content should NOT become
+            # a failure automatically.
+            #
+            # Therefore inserted words are only shown when
+            # they occur inside a relevant candidate.
+
+            differences.append(
+                f"Extra: {actual_part}"
+            )
+
+
+    if not differences:
+
+        return "Content differs."
+
+    return "; ".join(
+        differences[:8]
+    )
+
+
+# =========================================================
+# FIND PROBABLE VARIABLE MISMATCH
+#
+# This is the most important new function.
+#
+# We DO NOT compare the Order Form value against the
+# entire PDF.
+#
+# We only consider PDF blocks relevant to the selected
+# variable field.
+# =========================================================
+
+
+def search_probable_mismatch(
+    expected,
+    pdf_blocks,
+    field_name,
+    used_block_keys=None
+):
+    if used_block_keys is None:
+        used_block_keys = set()
+
+    expected_normalized = normalize_text(expected)
+    expected_tokens = tokenize(expected)
+
+    if not expected_tokens:
+        return None
+
+    field_type = get_field_type(field_name)
+
+    # Never fuzzy-match short single-token values.
+    if len(expected_tokens) == 1:
+        short_value = expected_tokens[0]
+        if short_value.isdigit() or len(short_value) <= 4:
+            return None
+
+    candidates = []
+
+    for block in pdf_blocks:
+        block_key = normalize_text(block)
+
+        if not block_key or block_key in used_block_keys:
+            continue
+
+        if is_relevant_block(
+            block,
+            field_type,
+            field_name,
+            expected
+        ):
+            candidates.append(block)
+
+    if not candidates:
+        return None
+
+    best = None
+
+    for block in candidates:
+        actual_normalized = normalize_text(block)
+        actual_tokens = tokenize(block)
+
+        if not actual_tokens:
+            continue
+
+        ratio = fuzz.ratio(expected_normalized, actual_normalized)
+        partial = fuzz.partial_ratio(expected_normalized, actual_normalized)
+        token_ratio = fuzz.token_set_ratio(
+            expected_normalized,
+            actual_normalized
+        )
+        overlap = token_overlap(expected, block)
+
+        score = (
+            ratio * 0.35
+            + partial * 0.20
+            + token_ratio * 0.25
+            + overlap * 100 * 0.20
+        )
+
+        expected_word_count = len(expected_tokens)
+
+        # Strong country-of-origin comparison.
+        if field_type == "COO":
+            expected_has_made_in = "made in" in expected_normalized
+            actual_has_made_in = "made in" in actual_normalized
+
+            if expected_has_made_in and actual_has_made_in:
+                expected_country = re.sub(
+                    r"^.*?made in\s+",
+                    "",
+                    expected_normalized
+                ).strip()
+
+                actual_country = re.sub(
+                    r"^.*?made in\s+",
+                    "",
+                    actual_normalized
+                ).strip()
+
+                if expected_country and actual_country:
+                    country_similarity = fuzz.ratio(
+                        expected_country,
+                        actual_country
+                    )
+
+                    if country_similarity < 95:
+                        return {
+                            "status": "FAIL",
+                            "pdf": block,
+                            "difference": get_difference(expected, block),
+                            "score": score,
+                            "match_key": get_match_key(expected),
+                            "block_key": normalize_text(block)
+                        }
+
+        if expected_word_count <= 2:
+            acceptable = score >= 80 and overlap >= 0.50
+        elif expected_word_count <= 5:
+            acceptable = score >= 70 and overlap >= 0.40
+        else:
+            acceptable = score >= 65 and overlap >= 0.30
+
+        if not acceptable:
+            continue
+
+        if best is None or score > best["score"]:
+            best = {
+                "status": "FAIL",
+                "pdf": block,
+                "difference": get_difference(expected, block),
+                "score": score,
+                "match_key": get_match_key(expected),
+                "block_key": normalize_text(block)
+            }
+
+    return best
+
+# =========================================================
+# CHECK ONE VARIABLE FIELD
+# =========================================================
+
+
+def check_field(
+    expected,
+    pdf_blocks,
+    field_name,
+    used_block_keys=None
+):
+    if used_block_keys is None:
+        used_block_keys = set()
+
+    if expected is None or str(expected).strip() == "":
+        return {
+            "status": "SKIP",
+            "pdf": "—",
+            "difference": "No variable data in Order Form.",
+            "match_key": "",
+            "block_key": ""
+        }
+
+    expected = str(expected).strip()
+
+    exact = search_exact_value(
+        expected,
+        pdf_blocks,
+        used_block_keys
+    )
+
+    if exact:
+        return exact
+
+    probable = search_probable_mismatch(
+        expected,
+        pdf_blocks,
+        field_name,
+        used_block_keys
+    )
+
+    if probable:
+        return probable
+
+    return {
+        "status": "NOT FOUND",
+        "pdf": "Not found in relevant PDF area",
+        "difference": "Selected variable value was not detected.",
+        "match_key": "",
+        "block_key": ""
+    }
+
+# =========================================================
+# PFL PANEL SUPPORT
+# =========================================================
+
+def get_pfl_panel_blocks(page_text):
+    """
+    PFL mode treats panel-numbered artwork as a continuous stream.
+    Panel labels such as 1, 2, 3 or PANEL 1 / PANEL 2 are removed
+    from the comparison content. The extracted lines are then grouped
+    into larger blocks so text split at a panel boundary can be found.
+    """
+    if not page_text:
+        return []
+
+    raw_lines = page_text.splitlines()
+    cleaned = []
+
+    panel_pattern = re.compile(
+        r"^\s*(?:panel\s*)?(\d{1,3})\s*$",
+        re.IGNORECASE
+    )
+
+    for raw in raw_lines:
+        line = clean_pdf_line(raw)
+        if not line:
+            continue
+        if len(line) > 1500:
+            continue
+
+        # Ignore standalone panel sequence numbers.
+        if panel_pattern.match(line):
+            continue
+
+        # Ignore common textual panel labels.
+        if re.match(r"^\s*panel\s*[-#:]?\s*\d{1,3}\s*$", line, re.IGNORECASE):
+            continue
+
+        cleaned.append(line)
+
+    if not cleaned:
+        return []
+
+    blocks = list(cleaned)
+
+    # Larger windows are the important part for PFL because a value
+    # may begin near the end of one panel and continue into the next.
+    maximum = min(24, len(cleaned))
+
+    for size in range(2, maximum + 1):
+        for start in range(len(cleaned) - size + 1):
+            block = " ".join(cleaned[start:start + size])
+            if block:
+                blocks.append(block)
+
+    unique = []
+    seen = set()
+
+    for block in blocks:
+        normalized = normalize_text(block)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(block)
+
+    return unique
+
+
+def get_comparison_blocks(page_text, product_type):
+    if product_type == "PFL":
+        return get_pfl_panel_blocks(page_text)
+    return create_pdf_blocks(page_text)
+
+
+# =========================================================
+# BUILD REPORT
+#
+# PAGE 1 → EXCEL ROW 2
+# PAGE 2 → EXCEL ROW 3
+# PAGE 3 → EXCEL ROW 4
+# =========================================================
+
+
+def build_report(
+    df,
+    pdf_pages,
+    selected_fields,
+    product_type
+):
+    results = []
+    field_no = 1
+
+    for page_index, page in enumerate(pdf_pages):
+        excel_index = page_index
+
+        if excel_index >= len(df):
+            for field in selected_fields:
+                results.append(
+                    {
+                        "FIELD NO": field_no,
+                        "PDF PAGE": page["page"],
+                        "EXCEL ROW": "N/A",
+                        "FIELD": field,
+                        "ORDER FORM DATA": "No Excel row",
+                        "PDF OUTPUT": "No corresponding Order Form row",
+                        "STATUS": "NOT FOUND",
+                        "DIFFERENCE": "No corresponding Excel row."
+                    }
+                )
+                field_no += 1
+            continue
+
+        row = df.iloc[excel_index]
+
+        pdf_blocks = get_comparison_blocks(
+            page["text"],
+            product_type
+        )
+
+        # A matched PDF block can only be used once on a page.
+        used_block_keys = set()
+
+        for field in selected_fields:
+            value = row[field]
+
+            if pd.isna(value):
+                value = ""
+            else:
+                value = str(value).strip()
+
+            if not value:
+                results.append(
+                    {
+                        "FIELD NO": field_no,
+                        "PDF PAGE": page["page"],
+                        "EXCEL ROW": excel_index + 2,
+                        "FIELD": field,
+                        "ORDER FORM DATA": "",
+                        "PDF OUTPUT": "—",
+                        "STATUS": "SKIP",
+                        "DIFFERENCE": (
+                            "Blank Order Form value — "
+                            "PDF content ignored."
+                        )
+                    }
+                )
+                field_no += 1
+                continue
+
+            result = check_field(
+                value,
+                pdf_blocks,
+                field,
+                used_block_keys
+            )
+
+            # Lock the exact PDF candidate after it has been
+            # assigned to this field.
+            if result["status"] in ["PASS", "FAIL"]:
+                block_key = result.get("block_key", "")
+                if block_key:
+                    used_block_keys.add(block_key)
+
+            results.append(
+                {
+                    "FIELD NO": field_no,
+                    "PDF PAGE": page["page"],
+                    "EXCEL ROW": excel_index + 2,
+                    "FIELD": field,
+                    "ORDER FORM DATA": value,
+                    "PDF OUTPUT": result["pdf"],
+                    "STATUS": result["status"],
+                    "DIFFERENCE": result["difference"]
+                }
+            )
+
+            field_no += 1
+
+    return pd.DataFrame(results)
+
+# =========================================================
+# STATUS COLORS
+# =========================================================
+
+def style_status(value):
+
+    if value == "PASS":
+
+        return (
+            "background-color: #238636;"
+            "color: white;"
+            "font-weight: bold;"
+        )
+
+
+    if value == "FAIL":
+
+        return (
+            "background-color: #da3633;"
+            "color: white;"
+            "font-weight: bold;"
+        )
+
+
+    if value == "NOT FOUND":
+
+        return (
+            "background-color: #9e6a03;"
+            "color: white;"
+            "font-weight: bold;"
+        )
+
+
+    if value == "SKIP":
+
+        return (
+            "background-color: #555555;"
+            "color: white;"
+            "font-weight: bold;"
+        )
+
+
+    return ""
+
+
+# =========================================================
 
 
 def main():
     """Order Form to Output Check tool."""
 
+    st.markdown(
+        """
+        <style>
+
+        html,
+        body,
         [data-testid="stAppViewContainer"],
         [data-testid="stApp"],
         .stApp,
@@ -205,1381 +1516,34 @@ def main():
         unsafe_allow_html=True
     )
 
+    st.markdown('<div class="main-title">🔍 Order Form to Output Check</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Compare selected variable Order Form fields against PDF artwork.</div>', unsafe_allow_html=True)
 
     # =========================================================
-    # APPLICATION NAVIGATION / HOME DASHBOARD
+    # TOOL CONTROLS
     # =========================================================
 
-    if "screen" not in st.session_state:
-        st.session_state["screen"] = "home"
+    if "of_reset_id" not in st.session_state:
+        st.session_state["of_reset_id"] = 0
 
-    if "reset_id" not in st.session_state:
+    if "report" not in st.session_state:
+        st.session_state["report"] = None
 
-        '<div class="sub-title">'
-        'Compare selected variable Order Form fields against PDF artwork.'
-        '</div>',
-        unsafe_allow_html=True
-    )
-
-
-    # =========================================================
-    # TOOL NAVIGATION
-    # =========================================================
-
-    nav_left, nav_right = st.columns([1, 1])
-
-    with nav_left:
-        if st.button("← HOME", key="back_home", width="stretch"):
-            st.session_state["screen"] = "home"
-            st.rerun()
-
-    with nav_right:
-        if st.button("🆕 NEW START", key="new_start", width="stretch"):
-            st.session_state["reset_id"] += 1
-            st.session_state["report"] = None
-            st.rerun()
-
-
-    # =========================================================
-    # PRODUCT TYPE
-    # =========================================================
+    if st.button("🆕 NEW START", key="of_new_start", width="stretch"):
+        st.session_state["of_reset_id"] += 1
+        st.session_state["report"] = None
+        st.rerun()
 
     product_type = st.selectbox(
         "Select Product Type",
-        options=[
-            "----- SELECT -----",
-            "PFL",
-            "HTL",
-            "Other"
-        ],
+        options=["----- SELECT -----", "PFL", "HTL", "Other"],
         index=0,
-        help=(
-            "PFL = panelled artwork where variable data may continue across panels. "
-            "HTL / Other = standard continuous-data comparison."
-        )
+        key="of_product_type"
     )
 
     if product_type == "----- SELECT -----":
         st.info("Please select a Product Type before starting the comparison.")
 
-
-    # =========================================================
-    # NORMALIZATION
-    # =========================================================
-
-    def normalize_text(text):
-
-        if text is None:
-            return ""
-
-        text = str(text)
-
-        text = unicodedata.normalize(
-            "NFKC",
-            text
-        )
-
-        text = text.lower()
-
-        # -----------------------------------------------------
-        # Normalize common PDF characters
-        # -----------------------------------------------------
-
-        text = text.replace("’", "'")
-        text = text.replace("`", "'")
-        text = text.replace("–", "-")
-        text = text.replace("—", "-")
-
-        # -----------------------------------------------------
-        # PDF line breaks
-        # -----------------------------------------------------
-
-        text = text.replace("\n", " ")
-        text = text.replace("\r", " ")
-
-        # -----------------------------------------------------
-        # IMPORTANT:
-        #
-        # The PDF may extract bullets as "n".
-        # We DO NOT want that "n" to become real content.
-        # -----------------------------------------------------
-
-        text = re.sub(
-            r"(^|\s)n(?=\s)",
-            " ",
-            text
-        )
-
-        # -----------------------------------------------------
-        # Separators
-        # -----------------------------------------------------
-
-        text = re.sub(
-            r"[,.;:|/\\]+",
-            " ",
-            text
-        )
-
-        text = re.sub(
-            r"-+",
-            " ",
-            text
-        )
-
-        # -----------------------------------------------------
-        # Remove remaining punctuation
-        # -----------------------------------------------------
-
-        text = re.sub(
-            r"[^\w%#'\s]",
-            " ",
-            text
-        )
-
-        # -----------------------------------------------------
-        # Apostrophe differences ignored
-        # -----------------------------------------------------
-
-        text = text.replace(
-            "'",
-            ""
-        )
-
-        # -----------------------------------------------------
-        # Multiple spaces
-        # -----------------------------------------------------
-
-        text = re.sub(
-            r"\s+",
-            " ",
-            text
-        )
-
-        return text.strip()
-
-
-    def compact_text(text):
-
-        return normalize_text(
-            text
-        ).replace(
-            " ",
-            ""
-        )
-
-
-    def tokenize(text):
-
-        value = normalize_text(
-            text
-        )
-
-        if not value:
-            return []
-
-        return value.split()
-
-
-    # =========================================================
-    # FIELD TYPE DETECTION
-    #
-    # This is NOT deciding what to check.
-    # The user-selected field is always checked.
-    #
-    # This only helps us locate the correct variable
-    # information inside the PDF.
-    # =========================================================
-
-
-    def get_field_type(field_name):
-
-        field = normalize_text(field_name)
-
-        compact = (
-            field
-            .replace(" ", "")
-            .replace("_", "")
-            .replace("-", "")
-        )
-
-        # RN / Registration Number — check early so it cannot
-        # accidentally be classified as a general field.
-        if (
-            compact in {"rn", "rnno", "rnnumber"}
-            or compact.startswith("rnno")
-            or compact.startswith("rnnumber")
-            or "registrationnumber" in compact
-            or "companyrn" in compact
-        ):
-            return "RN"
-
-        # Country of Origin
-        if (
-            "coo" in compact
-            or "countryoforigin" in compact
-            or "countryorigin" in compact
-            or "madein" in compact
-            or compact == "origin"
-            or compact.endswith("origin")
-        ):
-            return "COO"
-
-        # Fiber / Fabric / Content
-        if (
-            "fiber" in compact
-            or "fibre" in compact
-            or "fabric" in compact
-            or "content" in compact
-            or "composition" in compact
-            or "fabrication" in compact
-        ):
-            return "CONTENT"
-
-        # Care / Washing
-        if (
-            "care" in compact
-            or "wash" in compact
-            or "washing" in compact
-            or "laundry" in compact
-            or "instruction" in compact
-        ):
-            return "CARE"
-
-        # Size — includes OSZ / size-line fields
-        if (
-            "size" in compact
-            or compact.startswith("osz")
-            or "sizeline" in compact
-            or "alpha" in compact
-            or "waist" in compact
-            or "inseam" in compact
-            or "fit" in compact
-        ):
-            return "SIZE"
-
-        if "brand" in compact:
-            return "BRAND"
-
-        if "color" in compact or "colour" in compact:
-            return "COLOR"
-
-        if "gender" in compact:
-            return "GENDER"
-
-        if (
-            "attribute" in compact
-            or "technology" in compact
-            or "feature" in compact
-            or "description" in compact
-        ):
-            return "ATTRIBUTE"
-
-        return "GENERAL"
-
-    # =========================================================
-    # FIELD LANGUAGE / REGION DETECTION
-    # =========================================================
-
-    def get_field_region(field_name):
-
-        field = normalize_text(
-            field_name
-        )
-
-        compact = field.replace(
-            " ",
-            ""
-        )
-
-        # English
-
-        if (
-            "_en" in str(field_name).lower()
-            or compact.endswith("en")
-            or "english" in compact
-        ):
-
-            return "EN"
-
-
-        # French / Canada
-
-        if (
-            "_fr" in str(field_name).lower()
-            or compact.endswith("fr")
-            or "french" in compact
-            or "canada" in compact
-        ):
-
-            return "FR"
-
-
-        # Spanish
-
-        if (
-            "_sp" in str(field_name).lower()
-            or compact.endswith("sp")
-            or "spanish" in compact
-            or "espanol" in compact
-            or "span" in compact
-        ):
-
-            return "SP"
-
-
-        return ""
-
-
-    # =========================================================
-    # LOAD EXCEL
-    # =========================================================
-
-    def load_excel(file):
-
-        file.seek(0)
-
-        df = pd.read_excel(
-            file,
-            header=0
-        )
-
-        df.columns = [
-            str(column).strip()
-            for column in df.columns
-        ]
-
-        return df
-
-
-    # =========================================================
-    # LOAD PDF
-    # =========================================================
-
-    def load_pdf(file):
-
-        file.seek(0)
-
-        pdf_bytes = file.read()
-
-        document = fitz.open(
-            stream=pdf_bytes,
-            filetype="pdf"
-        )
-
-        pages = []
-
-        for page_number, page in enumerate(
-            document
-        ):
-
-            text = page.get_text(
-                "text"
-            )
-
-            pages.append(
-                {
-                    "page": page_number + 1,
-                    "text": text
-                }
-            )
-
-        document.close()
-
-        return pages
-
-
-    # =========================================================
-    # CLEAN PDF LINE
-    # =========================================================
-
-    def clean_pdf_line(line):
-
-        if not line:
-            return ""
-
-        line = str(line).strip()
-
-        # -----------------------------------------------------
-        # Remove PDF bullet/keystroke "n"
-        #
-        # Examples:
-        #
-        # n US :
-        # n CA :
-        # n MX :
-        #
-        # becomes:
-        #
-        # US :
-        # CA :
-        # MX :
-        # -----------------------------------------------------
-
-        line = re.sub(
-            r"^\s*n\s+(?=[A-Za-z])",
-            "",
-            line
-        )
-
-        return line.strip()
-
-
-    # =========================================================
-    # CREATE SMART PDF BLOCKS
-    # =========================================================
-
-    def create_pdf_blocks(page_text):
-
-        if not page_text:
-            return []
-
-        raw_lines = page_text.splitlines()
-
-        lines = []
-
-        for raw_line in raw_lines:
-
-            line = clean_pdf_line(
-                raw_line
-            )
-
-            if not line:
-                continue
-
-            if len(line) > 1500:
-                continue
-
-            lines.append(
-                line
-            )
-
-
-        if not lines:
-            return []
-
-
-        blocks = []
-
-
-        # -----------------------------------------------------
-        # INDIVIDUAL LINES
-        #
-        # Important because many variable fields are contained
-        # inside one PDF line.
-        # -----------------------------------------------------
-
-        for line in lines:
-
-            blocks.append(
-                line
-            )
-
-
-        # -----------------------------------------------------
-        # ADJACENT LINE BLOCKS
-        #
-        # Used for wrapped care/content text.
-        # -----------------------------------------------------
-
-        maximum = min(
-            8,
-            len(lines)
-        )
-
-        for size in range(
-            2,
-            maximum + 1
-        ):
-
-            for start in range(
-                len(lines) - size + 1
-            ):
-
-                block = " ".join(
-                    lines[
-                        start:start + size
-                    ]
-                )
-
-                if block:
-
-                    blocks.append(
-                        block
-                    )
-
-
-        # -----------------------------------------------------
-        # Full page is deliberately NOT used as the primary
-        # comparison block.
-        #
-        # This prevents unrelated static/regional information
-        # from being mixed with variable data.
-        # -----------------------------------------------------
-
-
-        # -----------------------------------------------------
-        # Remove duplicates
-        # -----------------------------------------------------
-
-        unique = []
-
-        seen = set()
-
-        for block in blocks:
-
-            normalized = normalize_text(
-                block
-            )
-
-            if not normalized:
-                continue
-
-            if normalized in seen:
-                continue
-
-            seen.add(
-                normalized
-            )
-
-            unique.append(
-                block
-            )
-
-        return unique
-
-
-    # =========================================================
-    # EXACT MATCH
-    # =========================================================
-
-
-    def exact_match(expected, actual):
-
-        expected_normalized = normalize_text(expected)
-        actual_normalized = normalize_text(actual)
-
-        if not expected_normalized or not actual_normalized:
-            return False
-
-        expected_tokens = tokenize(expected)
-        actual_tokens = tokenize(actual)
-
-        if not expected_tokens:
-            return False
-
-        # -----------------------------------------------------
-        # SHORT / SINGLE-TOKEN VALUES
-        #
-        # Examples:
-        # 2, 4, 8, S, M, L, XL, XXL
-        #
-        # These MUST be standalone tokens. This prevents:
-        # 2  -> matching RN# 55285
-        # 8  -> matching 55285
-        # M  -> matching MADE
-        # -----------------------------------------------------
-        if len(expected_tokens) == 1:
-            expected_value = expected_tokens[0]
-
-            if (
-                expected_value.isdigit()
-                or len(expected_value) <= 4
-            ):
-                return expected_value in actual_tokens
-
-        # -----------------------------------------------------
-        # NORMAL CASE-INSENSITIVE / SEPARATOR-TOLERANT MATCH
-        # -----------------------------------------------------
-        if expected_normalized in actual_normalized:
-            return True
-
-        # Space-independent match is only safe for meaningful
-        # multi-character values.
-        expected_compact = compact_text(expected)
-        actual_compact = compact_text(actual)
-
-        if (
-            expected_compact
-            and len(expected_compact) > 4
-            and expected_compact in actual_compact
-        ):
-            return True
-
-        return False
-
-
-    def get_match_key(value):
-
-        normalized = normalize_text(value)
-
-        if not normalized:
-            return ""
-
-        tokens = tokenize(value)
-
-        if len(tokens) == 1:
-            return f"TOKEN:{tokens[0]}"
-
-        return f"TEXT:{normalized}"
-
-    # =========================================================
-    # EXPECTED VALUE SEARCH
-    # =========================================================
-
-
-    def search_exact_value(expected, pdf_blocks, used_block_keys=None):
-        if used_block_keys is None:
-            used_block_keys = set()
-
-        expected_key = get_match_key(expected)
-
-        for block in pdf_blocks:
-            block_key = normalize_text(block)
-
-            if not block_key or block_key in used_block_keys:
-                continue
-
-            if exact_match(expected, block):
-                return {
-                    "status": "PASS",
-                    "pdf": block,
-                    "difference": "—",
-                    "score": 100,
-                    "match_key": expected_key,
-                    "block_key": block_key
-                }
-
-        return None
-
-    # =========================================================
-    # FIELD ANCHORS
-    #
-    # These help us locate the relevant variable value.
-    # They prevent static information from being treated as
-    # a mismatch.
-    # =========================================================
-
-    FIELD_ANCHORS = {
-
-        "COO": [
-            "made in",
-            "hecho en",
-            "fabrique en",
-            "madein"
-        ],
-
-        "CONTENT": [
-            "shell",
-            "liner",
-            "body",
-            "fabric",
-            "fiber",
-            "fibre",
-            "content",
-            "composition",
-            "exterior",
-            "extérieur",
-            "forro",
-            "doublure"
-        ],
-
-        "CARE": [
-            "machine wash",
-            "wash",
-            "lavar",
-            "laver",
-            "dry clean",
-            "bleach",
-            "blanchiment",
-            "detergent",
-            "detergente"
-        ],
-
-        "RN": [
-            "rn",
-            "ca"
-        ],
-
-        "SIZE": [
-            "size"
-        ],
-
-        "COLOR": [
-            "color",
-            "colour"
-        ],
-
-        "BRAND": [
-            "brand"
-        ],
-
-        "GENDER": [
-            "girls",
-            "boys",
-            "women",
-            "men",
-            "unisex"
-        ],
-
-        "ATTRIBUTE": [
-            "attribute",
-            "technology",
-            "feature"
-        ],
-
-        "GENERAL": []
-    }
-
-
-    # =========================================================
-    # CHECK IF BLOCK IS RELEVANT TO FIELD
-    # =========================================================
-
-    def is_relevant_block(
-        block,
-        field_type,
-        field_name,
-        expected
-    ):
-
-        normalized_block = normalize_text(
-            block
-        )
-
-        if not normalized_block:
-            return False
-
-
-        # -----------------------------------------------------
-        # Field-specific anchors
-        # -----------------------------------------------------
-
-        anchors = FIELD_ANCHORS.get(
-            field_type,
-            []
-        )
-
-
-        for anchor in anchors:
-
-            anchor_norm = normalize_text(
-                anchor
-            )
-
-            if (
-                anchor_norm
-                and
-                anchor_norm in normalized_block
-            ):
-
-                return True
-
-
-        # -----------------------------------------------------
-        # Language-specific clues
-        #
-        # Only used when the selected field name explicitly
-        # indicates a language.
-        # -----------------------------------------------------
-
-        region = get_field_region(
-            field_name
-        )
-
-
-        if region == "EN":
-
-            english_markers = [
-                "made in",
-                "machine wash",
-                "shell",
-                "liner",
-                "polyester",
-                "span dex",
-                "bleach"
-            ]
-
-            for marker in english_markers:
-
-                if normalize_text(marker) in normalized_block:
-
-                    return True
-
-
-        if region == "FR":
-
-            french_markers = [
-                "laver",
-                "machine",
-                "extérieur",
-                "doublure",
-                "polyester",
-                "élasthanne",
-                "sans chlore"
-            ]
-
-            for marker in french_markers:
-
-                if normalize_text(marker) in normalized_block:
-
-                    return True
-
-
-        if region == "SP":
-
-            spanish_markers = [
-                "lavar",
-                "máquina",
-                "maquina",
-                "cuerpo",
-                "forro",
-                "poliéster",
-                "poliester",
-                "cloro",
-                "hecho en"
-            ]
-
-            for marker in spanish_markers:
-
-                if normalize_text(marker) in normalized_block:
-
-                    return True
-
-
-        return False
-
-
-    # =========================================================
-    # TOKEN OVERLAP
-    # =========================================================
-
-    def token_overlap(
-        expected,
-        actual
-    ):
-
-        expected_tokens = set(
-            tokenize(expected)
-        )
-
-        actual_tokens = set(
-            tokenize(actual)
-        )
-
-        if not expected_tokens:
-            return 0
-
-        common = (
-            expected_tokens
-            &
-            actual_tokens
-        )
-
-        return (
-            len(common)
-            /
-            len(expected_tokens)
-        )
-
-
-    # =========================================================
-    # DIFFERENCE
-    # =========================================================
-
-    def get_difference(
-        expected,
-        actual
-    ):
-
-        expected_tokens = tokenize(
-            expected
-        )
-
-        actual_tokens = tokenize(
-            actual
-        )
-
-        if not expected_tokens:
-            return "Content differs."
-
-        if not actual_tokens:
-            return "Expected value is missing from PDF."
-
-        matcher = SequenceMatcher(
-            None,
-            expected_tokens,
-            actual_tokens
-        )
-
-        differences = []
-
-        for tag, a1, a2, b1, b2 in matcher.get_opcodes():
-
-            if tag == "equal":
-                continue
-
-
-            expected_part = " ".join(
-                expected_tokens[a1:a2]
-            )
-
-            actual_part = " ".join(
-                actual_tokens[b1:b2]
-            )
-
-
-            if tag == "replace":
-
-                differences.append(
-                    f"{expected_part} → {actual_part}"
-                )
-
-
-            elif tag == "delete":
-
-                differences.append(
-                    f"Missing: {expected_part}"
-                )
-
-
-            elif tag == "insert":
-
-                # IMPORTANT:
-                #
-                # Extra static PDF content should NOT become
-                # a failure automatically.
-                #
-                # Therefore inserted words are only shown when
-                # they occur inside a relevant candidate.
-
-                differences.append(
-                    f"Extra: {actual_part}"
-                )
-
-
-        if not differences:
-
-            return "Content differs."
-
-        return "; ".join(
-            differences[:8]
-        )
-
-
-    # =========================================================
-    # FIND PROBABLE VARIABLE MISMATCH
-    #
-    # This is the most important new function.
-    #
-    # We DO NOT compare the Order Form value against the
-    # entire PDF.
-    #
-    # We only consider PDF blocks relevant to the selected
-    # variable field.
-    # =========================================================
-
-
-    def search_probable_mismatch(
-        expected,
-        pdf_blocks,
-        field_name,
-        used_block_keys=None
-    ):
-        if used_block_keys is None:
-            used_block_keys = set()
-
-        expected_normalized = normalize_text(expected)
-        expected_tokens = tokenize(expected)
-
-        if not expected_tokens:
-            return None
-
-        field_type = get_field_type(field_name)
-
-        # Never fuzzy-match short single-token values.
-        if len(expected_tokens) == 1:
-            short_value = expected_tokens[0]
-            if short_value.isdigit() or len(short_value) <= 4:
-                return None
-
-        candidates = []
-
-        for block in pdf_blocks:
-            block_key = normalize_text(block)
-
-            if not block_key or block_key in used_block_keys:
-                continue
-
-            if is_relevant_block(
-                block,
-                field_type,
-                field_name,
-                expected
-            ):
-                candidates.append(block)
-
-        if not candidates:
-            return None
-
-        best = None
-
-        for block in candidates:
-            actual_normalized = normalize_text(block)
-            actual_tokens = tokenize(block)
-
-            if not actual_tokens:
-                continue
-
-            ratio = fuzz.ratio(expected_normalized, actual_normalized)
-            partial = fuzz.partial_ratio(expected_normalized, actual_normalized)
-            token_ratio = fuzz.token_set_ratio(
-                expected_normalized,
-                actual_normalized
-            )
-            overlap = token_overlap(expected, block)
-
-            score = (
-                ratio * 0.35
-                + partial * 0.20
-                + token_ratio * 0.25
-                + overlap * 100 * 0.20
-            )
-
-            expected_word_count = len(expected_tokens)
-
-            # Strong country-of-origin comparison.
-            if field_type == "COO":
-                expected_has_made_in = "made in" in expected_normalized
-                actual_has_made_in = "made in" in actual_normalized
-
-                if expected_has_made_in and actual_has_made_in:
-                    expected_country = re.sub(
-                        r"^.*?made in\s+",
-                        "",
-                        expected_normalized
-                    ).strip()
-
-                    actual_country = re.sub(
-                        r"^.*?made in\s+",
-                        "",
-                        actual_normalized
-                    ).strip()
-
-                    if expected_country and actual_country:
-                        country_similarity = fuzz.ratio(
-                            expected_country,
-                            actual_country
-                        )
-
-                        if country_similarity < 95:
-                            return {
-                                "status": "FAIL",
-                                "pdf": block,
-                                "difference": get_difference(expected, block),
-                                "score": score,
-                                "match_key": get_match_key(expected),
-                                "block_key": normalize_text(block)
-                            }
-
-            if expected_word_count <= 2:
-                acceptable = score >= 80 and overlap >= 0.50
-            elif expected_word_count <= 5:
-                acceptable = score >= 70 and overlap >= 0.40
-            else:
-                acceptable = score >= 65 and overlap >= 0.30
-
-            if not acceptable:
-                continue
-
-            if best is None or score > best["score"]:
-                best = {
-                    "status": "FAIL",
-                    "pdf": block,
-                    "difference": get_difference(expected, block),
-                    "score": score,
-                    "match_key": get_match_key(expected),
-                    "block_key": normalize_text(block)
-                }
-
-        return best
-
-    # =========================================================
-    # CHECK ONE VARIABLE FIELD
-    # =========================================================
-
-
-    def check_field(
-        expected,
-        pdf_blocks,
-        field_name,
-        used_block_keys=None
-    ):
-        if used_block_keys is None:
-            used_block_keys = set()
-
-        if expected is None or str(expected).strip() == "":
-            return {
-                "status": "SKIP",
-                "pdf": "—",
-                "difference": "No variable data in Order Form.",
-                "match_key": "",
-                "block_key": ""
-            }
-
-        expected = str(expected).strip()
-
-        exact = search_exact_value(
-            expected,
-            pdf_blocks,
-            used_block_keys
-        )
-
-        if exact:
-            return exact
-
-        probable = search_probable_mismatch(
-            expected,
-            pdf_blocks,
-            field_name,
-            used_block_keys
-        )
-
-        if probable:
-            return probable
-
-        return {
-            "status": "NOT FOUND",
-            "pdf": "Not found in relevant PDF area",
-            "difference": "Selected variable value was not detected.",
-            "match_key": "",
-            "block_key": ""
-        }
-
-    # =========================================================
-    # PFL PANEL SUPPORT
-    # =========================================================
-
-    def get_pfl_panel_blocks(page_text):
-        """
-        PFL mode treats panel-numbered artwork as a continuous stream.
-        Panel labels such as 1, 2, 3 or PANEL 1 / PANEL 2 are removed
-        from the comparison content. The extracted lines are then grouped
-        into larger blocks so text split at a panel boundary can be found.
-        """
-        if not page_text:
-            return []
-
-        raw_lines = page_text.splitlines()
-        cleaned = []
-
-        panel_pattern = re.compile(
-            r"^\s*(?:panel\s*)?(\d{1,3})\s*$",
-            re.IGNORECASE
-        )
-
-        for raw in raw_lines:
-            line = clean_pdf_line(raw)
-            if not line:
-                continue
-            if len(line) > 1500:
-                continue
-
-            # Ignore standalone panel sequence numbers.
-            if panel_pattern.match(line):
-                continue
-
-            # Ignore common textual panel labels.
-            if re.match(r"^\s*panel\s*[-#:]?\s*\d{1,3}\s*$", line, re.IGNORECASE):
-                continue
-
-            cleaned.append(line)
-
-        if not cleaned:
-            return []
-
-        blocks = list(cleaned)
-
-        # Larger windows are the important part for PFL because a value
-        # may begin near the end of one panel and continue into the next.
-        maximum = min(24, len(cleaned))
-
-        for size in range(2, maximum + 1):
-            for start in range(len(cleaned) - size + 1):
-                block = " ".join(cleaned[start:start + size])
-                if block:
-                    blocks.append(block)
-
-        unique = []
-        seen = set()
-
-        for block in blocks:
-            normalized = normalize_text(block)
-            if not normalized or normalized in seen:
-                continue
-            seen.add(normalized)
-            unique.append(block)
-
-        return unique
-
-
-    def get_comparison_blocks(page_text, product_type):
-        if product_type == "PFL":
-            return get_pfl_panel_blocks(page_text)
-        return create_pdf_blocks(page_text)
-
-
-    # =========================================================
-    # BUILD REPORT
-    #
-    # PAGE 1 → EXCEL ROW 2
-    # PAGE 2 → EXCEL ROW 3
-    # PAGE 3 → EXCEL ROW 4
-    # =========================================================
-
-
-    def build_report(
-        df,
-        pdf_pages,
-        selected_fields,
-        product_type
-    ):
-        results = []
-        field_no = 1
-
-        for page_index, page in enumerate(pdf_pages):
-            excel_index = page_index
-
-            if excel_index >= len(df):
-                for field in selected_fields:
-                    results.append(
-                        {
-                            "FIELD NO": field_no,
-                            "PDF PAGE": page["page"],
-                            "EXCEL ROW": "N/A",
-                            "FIELD": field,
-                            "ORDER FORM DATA": "No Excel row",
-                            "PDF OUTPUT": "No corresponding Order Form row",
-                            "STATUS": "NOT FOUND",
-                            "DIFFERENCE": "No corresponding Excel row."
-                        }
-                    )
-                    field_no += 1
-                continue
-
-            row = df.iloc[excel_index]
-
-            pdf_blocks = get_comparison_blocks(
-                page["text"],
-                product_type
-            )
-
-            # A matched PDF block can only be used once on a page.
-            used_block_keys = set()
-
-            for field in selected_fields:
-                value = row[field]
-
-                if pd.isna(value):
-                    value = ""
-                else:
-                    value = str(value).strip()
-
-                if not value:
-                    results.append(
-                        {
-                            "FIELD NO": field_no,
-                            "PDF PAGE": page["page"],
-                            "EXCEL ROW": excel_index + 2,
-                            "FIELD": field,
-                            "ORDER FORM DATA": "",
-                            "PDF OUTPUT": "—",
-                            "STATUS": "SKIP",
-                            "DIFFERENCE": (
-                                "Blank Order Form value — "
-                                "PDF content ignored."
-                            )
-                        }
-                    )
-                    field_no += 1
-                    continue
-
-                result = check_field(
-                    value,
-                    pdf_blocks,
-                    field,
-                    used_block_keys
-                )
-
-                # Lock the exact PDF candidate after it has been
-                # assigned to this field.
-                if result["status"] in ["PASS", "FAIL"]:
-                    block_key = result.get("block_key", "")
-                    if block_key:
-                        used_block_keys.add(block_key)
-
-                results.append(
-                    {
-                        "FIELD NO": field_no,
-                        "PDF PAGE": page["page"],
-                        "EXCEL ROW": excel_index + 2,
-                        "FIELD": field,
-                        "ORDER FORM DATA": value,
-                        "PDF OUTPUT": result["pdf"],
-                        "STATUS": result["status"],
-                        "DIFFERENCE": result["difference"]
-                    }
-                )
-
-                field_no += 1
-
-        return pd.DataFrame(results)
-
-    # =========================================================
-    # STATUS COLORS
-    # =========================================================
-
-    def style_status(value):
-
-        if value == "PASS":
-
-            return (
-                "background-color: #238636;"
-                "color: white;"
-                "font-weight: bold;"
-            )
-
-
-        if value == "FAIL":
-
-            return (
-                "background-color: #da3633;"
-                "color: white;"
-                "font-weight: bold;"
-            )
-
-
-        if value == "NOT FOUND":
-
-            return (
-                "background-color: #9e6a03;"
-                "color: white;"
-                "font-weight: bold;"
-            )
-
-
-        if value == "SKIP":
-
-            return (
-                "background-color: #555555;"
-                "color: white;"
-                "font-weight: bold;"
-            )
-
-
-        return ""
-
-
-    # =========================================================
     # UPLOAD AREA
     # =========================================================
 
@@ -1605,7 +1569,7 @@ def main():
                 "xlsx",
                 "xls"
             ],
-            key=f"excel_upload_{st.session_state['reset_id']}"
+            key=f"excel_upload_{st.session_state['of_reset_id']}"
         )
 
 
@@ -1625,7 +1589,7 @@ def main():
             type=[
                 "pdf"
             ],
-            key=f"pdf_upload_{st.session_state['reset_id']}"
+            key=f"pdf_upload_{st.session_state['of_reset_id']}"
         )
 
 

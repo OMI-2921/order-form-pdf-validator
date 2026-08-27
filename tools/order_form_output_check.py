@@ -8,482 +8,110 @@ from difflib import SequenceMatcher
 
 
 # =========================================================
-# PAGE CONFIGURATION
+# SESSION STATE
 # =========================================================
 
-st.set_page_config(
-    page_title="PDF Proofreader",
-    page_icon="🔍",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+if "of_product_type" not in st.session_state:
+    st.session_state["of_product_type"] = "Other"
+
+if "of_selected_fields" not in st.session_state:
+    st.session_state["of_selected_fields"] = []
+
+if "of_result" not in st.session_state:
+    st.session_state["of_result"] = None
 
 
 # =========================================================
-# DARK UI
+# TOOL CSS
 # =========================================================
 
 st.markdown(
     """
     <style>
 
-    html,
-    body,
-    [data-testid="stAppViewContainer"],
-    [data-testid="stApp"],
-    .stApp,
-    .main,
-    [data-testid="stMain"] {
-        background-color: #0e1117 !important;
-        color: #ffffff !important;
-    }
-
-    [data-testid="stHeader"] {
-        background-color: #0e1117 !important;
-    }
-
-    .stApp,
-    .stApp p,
-    .stApp label,
-    .stApp span,
-    .stApp div {
+    .tool-page-title {
+        font-size: 34px;
+        font-weight: 800;
+        margin-bottom: 4px;
         color: #ffffff;
     }
 
-    .main-title {
-        color: #ffffff !important;
-        font-size: 34px;
-        font-weight: 700;
-        margin-top: 5px;
-        margin-bottom: 4px;
-    }
-
-    .sub-title {
-        color: #b8c0cc !important;
+    .tool-page-subtitle {
+        color: #aeb8c7;
         font-size: 15px;
-        margin-bottom: 30px;
+        margin-bottom: 28px;
     }
 
-    .section-title {
-        color: #ffffff !important;
-        font-size: 20px;
-        font-weight: 700;
-        margin-top: 12px;
+    .tool-section-title {
+        font-size: 19px;
+        font-weight: 750;
+        color: #ffffff;
+        margin-top: 10px;
         margin-bottom: 10px;
     }
 
-    [data-testid="stFileUploader"] {
-        background-color: #161b22 !important;
-        border: 1px solid #4b5563 !important;
-        border-radius: 12px !important;
-        padding: 8px !important;
+    .field-info-card {
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: rgba(30, 41, 59, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.20);
+        margin-bottom: 12px;
     }
 
-    [data-testid="stFileUploaderDropzone"] {
-        background-color: #161b22 !important;
-        border: 1px solid #4b5563 !important;
-        border-radius: 10px !important;
-    }
-
-    [data-testid="stFileUploaderDropzoneInstructions"] {
-        color: #ffffff !important;
-    }
-
-    [data-testid="stFileUploaderDropzoneInstructions"] span {
-        color: #ffffff !important;
-    }
-
-    [data-testid="stFileUploader"] button {
-        background-color: #111827 !important;
-        color: #ffffff !important;
-        border: 1px solid #6b7280 !important;
-        border-radius: 8px !important;
-    }
-
-    [data-testid="stFileUploader"] button:hover {
-        background-color: #1f2937 !important;
-        color: #ffffff !important;
-    }
-
-    [data-baseweb="select"] > div {
-        background-color: #161b22 !important;
-        color: #ffffff !important;
-        border: 1px solid #4b5563 !important;
-        border-radius: 10px !important;
-    }
-
-    [data-baseweb="select"] input {
-        color: #ffffff !important;
-    }
-
-    [data-baseweb="select"] span {
-        color: #ffffff !important;
-    }
-
-    [data-baseweb="popover"] {
-        background-color: #161b22 !important;
-    }
-
-    [role="option"] {
-        background-color: #161b22 !important;
-        color: #ffffff !important;
-    }
-
-    [role="option"]:hover {
-        background-color: #263241 !important;
-    }
-
-    [data-baseweb="tag"] {
-        background-color: #2563eb !important;
-        color: #ffffff !important;
-    }
-
-    [data-baseweb="tag"] span {
-        color: #ffffff !important;
-    }
-
-    div.stButton > button {
-        background-color: #2196F3 !important;
-        color: #ffffff !important;
-        border: 2px solid #000000 !important;
-        border-radius: 12px !important;
-        font-size: 18px !important;
-        font-weight: 700 !important;
-        height: 54px !important;
-        width: 100% !important;
-        box-shadow: none !important;
-    }
-
-    div.stButton > button:hover {
-        background-color: #1976D2 !important;
-        color: #ffffff !important;
-        border: 2px solid #000000 !important;
-    }
-
-    div.stDownloadButton > button {
-        background-color: #1f2937 !important;
-        color: #ffffff !important;
-        border: 1px solid #6b7280 !important;
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-    }
-
-    div.stDownloadButton > button:hover {
-        background-color: #374151 !important;
-        color: #ffffff !important;
-    }
-
-    [data-testid="stDataFrame"] {
-        border: 1px solid #374151 !important;
-        border-radius: 10px !important;
-    }
-
-    [data-testid="stMetric"] {
-        background-color: #161b22 !important;
-        border: 1px solid #374151 !important;
-        border-radius: 10px !important;
-        padding: 12px !important;
-    }
-
-    [data-testid="stMetricLabel"] {
-        color: #b8c0cc !important;
-    }
-
-    [data-testid="stMetricValue"] {
-        color: #ffffff !important;
-    }
-
-    hr {
-        border-color: #30363d !important;
-    }
-
-    .stCaption {
-        color: #9ca3af !important;
-    }
-
-    [data-testid="stAlert"] {
-        border-radius: 10px !important;
-    }
-
-    [data-testid="stSpinner"] {
-        color: #ffffff !important;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-
-# =========================================================
-# APPLICATION NAVIGATION / HOME DASHBOARD
-# =========================================================
-
-if "screen" not in st.session_state:
-    st.session_state["screen"] = "home"
-
-if "reset_id" not in st.session_state:
-    st.session_state["reset_id"] = 0
-
-if "report" not in st.session_state:
-    st.session_state["report"] = None
-
-# ---------------------------------------------------------
-# HOME DASHBOARD THEME
-# ---------------------------------------------------------
-
-st.markdown(
-    """
-    <style>
-    .dashboard-wrap {
-        max-width: 1250px;
-        margin: 0 auto;
-        padding: 24px 10px 40px 10px;
-    }
-
-    .dashboard-kicker {
-        text-align: center;
-        color: #60a5fa !important;
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 3px;
-        text-transform: uppercase;
-        margin-top: 10px;
-    }
-
-    .dashboard-title {
-        text-align: center;
-        color: #ffffff !important;
-        font-size: 48px;
-        font-weight: 800;
-        letter-spacing: 1px;
-        margin: 4px 0 6px 0;
-    }
-
-    .dashboard-subtitle {
-        text-align: center;
-        color: #9ca3af !important;
-        font-size: 16px;
-        margin-bottom: 34px;
-    }
-
-    .tool-card {
-        min-height: 265px;
-        padding: 28px 24px 20px 24px;
-        border-radius: 20px;
-        border: 1px solid #303b4d;
-        background: linear-gradient(145deg, #151b26 0%, #0f141d 100%);
-        box-shadow: 0 14px 35px rgba(0,0,0,.28);
-        margin-bottom: 8px;
-    }
-
-    .tool-icon {
-        width: 58px;
-        height: 58px;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #172554;
-        border: 1px solid #2563eb;
+    .field-info-title {
         color: #93c5fd;
-        font-size: 29px;
-        margin-bottom: 20px;
-    }
-
-    .tool-card h3 {
-        color: #ffffff !important;
-        font-size: 20px;
-        line-height: 1.25;
-        margin: 0 0 10px 0;
-    }
-
-    .tool-card p {
-        color: #9ca3af !important;
-        font-size: 14px;
-        line-height: 1.55;
-        min-height: 66px;
-        margin: 0;
-    }
-
-    .coming-card .tool-icon {
-        background: #211b31;
-        border-color: #7c3aed;
-        color: #c4b5fd;
-    }
-
-    .coming-badge {
-        display: inline-block;
-        margin-top: 12px;
-        padding: 5px 10px;
-        border-radius: 999px;
-        background: #27272a;
-        color: #a1a1aa !important;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .7px;
-    }
-
-    .feature-strip {
-        margin-top: 18px;
-        padding: 16px 20px;
-        border: 1px solid #263244;
-        border-radius: 16px;
-        background: #111827;
-        text-align: center;
-        color: #cbd5e1 !important;
         font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.7px;
     }
 
-    .feature-strip span {
-        margin: 0 18px;
-        color: #cbd5e1 !important;
+    .field-info-value {
+        color: #ffffff;
+        font-size: 15px;
+        margin-top: 4px;
     }
 
-    .dashboard-footer {
-        text-align: center;
-        color: #64748b !important;
-        font-size: 12px;
-        margin-top: 26px;
+    .result-pass {
+        color: #4ade80;
+        font-weight: 800;
     }
+
+    .result-fail {
+        color: #f87171;
+        font-weight: 800;
+    }
+
+    .result-warning {
+        color: #fbbf24;
+        font-weight: 800;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
 )
-
-
-def show_home():
-    st.markdown('<div class="dashboard-wrap">', unsafe_allow_html=True)
-    st.markdown('<div class="dashboard-kicker">QUALITY CONTROL PLATFORM</div>', unsafe_allow_html=True)
-    st.markdown('<div class="dashboard-title">QC PROOFREADER</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="dashboard-subtitle">Smart artwork validation for Order Forms, specifications and production output.</div>',
-        unsafe_allow_html=True
-    )
-
-    cards = [
-        (
-            "📄",
-            "ORDER-FORM<br>TO OUTPUT-CHECK",
-            "Validate selected variable Order Form data against PDF artwork, including panel-aware PFL checking.",
-            "active"
-        ),
-        (
-            "🔍",
-            "ORIGINAL SPEC<br>TO OUTPUT-CHECK",
-            "Compare production artwork directly against the approved original specification.",
-            "coming"
-        ),
-        (
-            "🔄",
-            "SPEC + ORDER FORM<br>+ OUTPUT CHECK",
-            "Cross-check the specification, Order Form and final output together in one workflow.",
-            "coming"
-        ),
-        (
-            "⚙️",
-            "MORE QC<br>TOOLS",
-            "Additional artwork and production-quality utilities can be added here later.",
-            "coming"
-        ),
-    ]
-
-    cols = st.columns(4, gap="large")
-    for col, (icon, title, description, state) in zip(cols, cards):
-        with col:
-            badge = "<div class=\"coming-badge\">COMING SOON</div>" if state == "coming" else ""
-            card_class = "tool-card coming-card" if state == "coming" else "tool-card"
-            st.markdown(
-                f'<div class="{card_class}">'
-                f'<div class="tool-icon">{icon}</div>'
-                f'<h3>{title}</h3>'
-                f'<p>{description}</p>'
-                f'{badge}'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-
-            if state == "active":
-                if st.button("🚀  START NOW", key="open_order_output", use_container_width=True):
-                    st.session_state["screen"] = "order_output"
-                    st.rerun()
-            else:
-                st.button("Coming Soon", key=f"soon_{title}", disabled=True, use_container_width=True)
-
-    st.markdown(
-        '<div class="feature-strip">'
-        '<span>✓ Accurate</span><span>⚡ Fast</span><span>◈ Field-Aware</span><span>✓ QC Focused</span>'
-        '</div>',
-        unsafe_allow_html=True
-    )
-    st.markdown(
-        '<div class="dashboard-footer">QC Proofreader • Artwork Quality Control</div>',
-        unsafe_allow_html=True
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
-if st.session_state["screen"] == "home":
-    show_home()
-    st.stop()
 
 
 # =========================================================
 # TITLE
 # =========================================================
 
-st.markdown(
-    '<div class="main-title">🔍 PDF Proofreader</div>',
-    unsafe_allow_html=True
-)
+def render_title():
 
-st.markdown(
-    '<div class="sub-title">'
-    'Compare selected variable Order Form fields against PDF artwork.'
-    '</div>',
-    unsafe_allow_html=True
-)
-
-
-# =========================================================
-# TOOL NAVIGATION
-# =========================================================
-
-nav_left, nav_right = st.columns([1, 1])
-
-with nav_left:
-    if st.button("← HOME", key="back_home", use_container_width=True):
-        st.session_state["screen"] = "home"
-        st.rerun()
-
-with nav_right:
-    if st.button("🆕 NEW START", key="new_start", use_container_width=True):
-        st.session_state["reset_id"] += 1
-        st.session_state["report"] = None
-        st.rerun()
-
-
-# =========================================================
-# PRODUCT TYPE
-# =========================================================
-
-product_type = st.selectbox(
-    "Select Product Type",
-    options=[
-        "----- SELECT -----",
-        "PFL",
-        "HTL",
-        "Other"
-    ],
-    index=0,
-    help=(
-        "PFL = panelled artwork where variable data may continue across panels. "
-        "HTL / Other = standard continuous-data comparison."
+    st.markdown(
+        '<div class="tool-page-title">'
+        '🔍 Order Form → Output Check'
+        '</div>',
+        unsafe_allow_html=True
     )
-)
 
-if product_type == "----- SELECT -----":
-    st.info("Please select a Product Type before starting the comparison.")
+    st.markdown(
+        '<div class="tool-page-subtitle">'
+        'Select variable Order Form fields and compare them '
+        'against the final PDF artwork.'
+        '</div>',
+        unsafe_allow_html=True
+    )
 
 
 # =========================================================
@@ -504,38 +132,20 @@ def normalize_text(text):
 
     text = text.lower()
 
-    # -----------------------------------------------------
-    # Normalize common PDF characters
-    # -----------------------------------------------------
-
     text = text.replace("’", "'")
     text = text.replace("`", "'")
     text = text.replace("–", "-")
     text = text.replace("—", "-")
 
-    # -----------------------------------------------------
-    # PDF line breaks
-    # -----------------------------------------------------
-
     text = text.replace("\n", " ")
     text = text.replace("\r", " ")
 
-    # -----------------------------------------------------
-    # IMPORTANT:
-    #
-    # The PDF may extract bullets as "n".
-    # We DO NOT want that "n" to become real content.
-    # -----------------------------------------------------
-
+    # PDF bullet extraction cleanup.
     text = re.sub(
         r"(^|\s)n(?=\s)",
         " ",
         text
     )
-
-    # -----------------------------------------------------
-    # Separators
-    # -----------------------------------------------------
 
     text = re.sub(
         r"[,.;:|/\\]+",
@@ -549,28 +159,16 @@ def normalize_text(text):
         text
     )
 
-    # -----------------------------------------------------
-    # Remove remaining punctuation
-    # -----------------------------------------------------
-
     text = re.sub(
         r"[^\w%#'\s]",
         " ",
         text
     )
 
-    # -----------------------------------------------------
-    # Apostrophe differences ignored
-    # -----------------------------------------------------
-
     text = text.replace(
         "'",
         ""
     )
-
-    # -----------------------------------------------------
-    # Multiple spaces
-    # -----------------------------------------------------
 
     text = re.sub(
         r"\s+",
@@ -604,13 +202,7 @@ def tokenize(text):
 
 
 # =========================================================
-# FIELD TYPE DETECTION
-#
-# This is NOT deciding what to check.
-# The user-selected field is always checked.
-#
-# This only helps us locate the correct variable
-# information inside the PDF.
+# FIELD TYPE
 # =========================================================
 
 def get_field_type(field_name):
@@ -624,8 +216,6 @@ def get_field_type(field_name):
         ""
     )
 
-    # Country of Origin
-
     if (
         "coo" in compact
         or "countryoforigin" in compact
@@ -633,11 +223,7 @@ def get_field_type(field_name):
         or "madein" in compact
         or "origin" in compact
     ):
-
         return "COO"
-
-
-    # Fiber / Fabric / Content
 
     if (
         "fiber" in compact
@@ -647,11 +233,7 @@ def get_field_type(field_name):
         or "composition" in compact
         or "fabrication" in compact
     ):
-
         return "CONTENT"
-
-
-    # Care / Washing
 
     if (
         "care" in compact
@@ -660,11 +242,7 @@ def get_field_type(field_name):
         or "laundry" in compact
         or "instruction" in compact
     ):
-
         return "CARE"
-
-
-    # Size
 
     if (
         "size" in compact
@@ -674,50 +252,26 @@ def get_field_type(field_name):
         or "inseam" in compact
         or "fit" in compact
     ):
-
         return "SIZE"
-
-
-    # RN
 
     if (
         compact == "rn"
         or "registrationnumber" in compact
         or "companyrn" in compact
     ):
-
         return "RN"
 
-
-    # Brand
-
-    if (
-        "brand" in compact
-    ):
-
+    if "brand" in compact:
         return "BRAND"
-
-
-    # Color
 
     if (
         "color" in compact
         or "colour" in compact
     ):
-
         return "COLOR"
 
-
-    # Gender
-
-    if (
-        "gender" in compact
-    ):
-
+    if "gender" in compact:
         return "GENDER"
-
-
-    # Attribute
 
     if (
         "attribute" in compact
@@ -725,15 +279,13 @@ def get_field_type(field_name):
         or "feature" in compact
         or "description" in compact
     ):
-
         return "ATTRIBUTE"
-
 
     return "GENERAL"
 
 
 # =========================================================
-# FIELD LANGUAGE / REGION DETECTION
+# FIELD REGION
 # =========================================================
 
 def get_field_region(field_name):
@@ -747,47 +299,39 @@ def get_field_region(field_name):
         ""
     )
 
-    # English
+    original = str(
+        field_name
+    ).lower()
 
     if (
-        "_en" in str(field_name).lower()
+        "_en" in original
         or compact.endswith("en")
         or "english" in compact
     ):
-
         return "EN"
 
-
-    # French / Canada
-
     if (
-        "_fr" in str(field_name).lower()
+        "_fr" in original
         or compact.endswith("fr")
         or "french" in compact
         or "canada" in compact
     ):
-
         return "FR"
 
-
-    # Spanish
-
     if (
-        "_sp" in str(field_name).lower()
+        "_sp" in original
         or compact.endswith("sp")
         or "spanish" in compact
         or "espanol" in compact
         or "span" in compact
     ):
-
         return "SP"
-
 
     return ""
 
 
 # =========================================================
-# LOAD EXCEL
+# EXCEL
 # =========================================================
 
 def load_excel(file):
@@ -799,6 +343,16 @@ def load_excel(file):
         header=0
     )
 
+    df = df.dropna(
+        axis=0,
+        how="all"
+    )
+
+    df = df.dropna(
+        axis=1,
+        how="all"
+    )
+
     df.columns = [
         str(column).strip()
         for column in df.columns
@@ -808,7 +362,7 @@ def load_excel(file):
 
 
 # =========================================================
-# LOAD PDF
+# PDF
 # =========================================================
 
 def load_pdf(file):
@@ -845,7 +399,7 @@ def load_pdf(file):
 
 
 # =========================================================
-# CLEAN PDF LINE
+# PDF LINE CLEANING
 # =========================================================
 
 def clean_pdf_line(line):
@@ -854,22 +408,6 @@ def clean_pdf_line(line):
         return ""
 
     line = str(line).strip()
-
-    # -----------------------------------------------------
-    # Remove PDF bullet/keystroke "n"
-    #
-    # Examples:
-    #
-    # n US :
-    # n CA :
-    # n MX :
-    #
-    # becomes:
-    #
-    # US :
-    # CA :
-    # MX :
-    # -----------------------------------------------------
 
     line = re.sub(
         r"^\s*n\s+(?=[A-Za-z])",
@@ -881,7 +419,7 @@ def clean_pdf_line(line):
 
 
 # =========================================================
-# CREATE SMART PDF BLOCKS
+# STANDARD PDF BLOCKS
 # =========================================================
 
 def create_pdf_blocks(page_text):
@@ -909,34 +447,18 @@ def create_pdf_blocks(page_text):
             line
         )
 
-
     if not lines:
         return []
 
-
     blocks = []
 
-
-    # -----------------------------------------------------
-    # INDIVIDUAL LINES
-    #
-    # Important because many variable fields are contained
-    # inside one PDF line.
-    # -----------------------------------------------------
-
+    # Individual lines.
     for line in lines:
-
         blocks.append(
             line
         )
 
-
-    # -----------------------------------------------------
-    # ADJACENT LINE BLOCKS
-    #
-    # Used for wrapped care/content text.
-    # -----------------------------------------------------
-
+    # Adjacent lines for wrapped content.
     maximum = min(
         8,
         len(lines)
@@ -958,27 +480,278 @@ def create_pdf_blocks(page_text):
             )
 
             if block:
+                blocks.append(
+                    block
+                )
+
+    unique = []
+    seen = set()
+
+    for block in blocks:
+
+        normalized = normalize_text(
+            block
+        )
+
+        if not normalized:
+            continue
+
+        if normalized in seen:
+            continue
+
+        seen.add(
+            normalized
+        )
+
+        unique.append(
+            block
+        )
+
+    return unique
+
+
+# =========================================================
+# PFL PANEL LOGIC
+# =========================================================
+
+def _panel_number_from_line(line):
+
+    if not line:
+        return None
+
+    value = str(
+        line
+    ).strip()
+
+    match = re.fullmatch(
+        r"(?:panel\s*(?:no\.?|number|#)?\s*[-:]?\s*)?(\d{1,3})",
+        value,
+        flags=re.IGNORECASE
+    )
+
+    if not match:
+        return None
+
+    number = int(
+        match.group(1)
+    )
+
+    if 1 <= number <= 99:
+        return number
+
+    return None
+
+
+def split_pfl_panels(page_text):
+
+    if not page_text:
+        return []
+
+    raw_lines = page_text.splitlines()
+
+    lines = []
+
+    for raw_line in raw_lines:
+
+        line = clean_pdf_line(
+            raw_line
+        )
+
+        if not line:
+            continue
+
+        if len(line) > 1500:
+            continue
+
+        lines.append(
+            line
+        )
+
+    if not lines:
+        return []
+
+    markers = []
+
+    for index, line in enumerate(lines):
+
+        number = _panel_number_from_line(
+            line
+        )
+
+        if number is not None:
+
+            markers.append(
+                {
+                    "index": index,
+                    "number": number
+                }
+            )
+
+    distinct_numbers = []
+
+    for marker in markers:
+
+        if marker["number"] not in distinct_numbers:
+
+            distinct_numbers.append(
+                marker["number"]
+            )
+
+    if (
+        len(distinct_numbers) < 2
+        or
+        1 not in distinct_numbers
+    ):
+        return lines
+
+    if len(distinct_numbers) != len(markers):
+        return lines
+
+    first_marker_index = markers[0]["index"]
+
+    number_is_above = (
+        first_marker_index <= 1
+    )
+
+    segments = []
+
+    if number_is_above:
+
+        for position, marker in enumerate(
+            markers
+        ):
+
+            start = marker["index"] + 1
+
+            if position + 1 < len(markers):
+
+                end = markers[
+                    position + 1
+                ]["index"]
+
+            else:
+
+                end = len(lines)
+
+            content = lines[
+                start:end
+            ]
+
+            if content:
+
+                segments.append(
+                    {
+                        "number": marker["number"],
+                        "lines": content
+                    }
+                )
+
+    else:
+
+        start = 0
+
+        for marker in markers:
+
+            end = marker["index"]
+
+            content = lines[
+                start:end
+            ]
+
+            if content:
+
+                segments.append(
+                    {
+                        "number": marker["number"],
+                        "lines": content
+                    }
+                )
+
+            start = (
+                marker["index"] + 1
+            )
+
+        if start < len(lines):
+
+            segments.append(
+                {
+                    "number": 999999,
+                    "lines": lines[start:]
+                }
+            )
+
+    if not segments:
+        return lines
+
+    segments.sort(
+        key=lambda item: item["number"]
+    )
+
+    ordered_lines = []
+
+    for segment in segments:
+
+        ordered_lines.extend(
+            segment["lines"]
+        )
+
+    return ordered_lines
+
+
+def create_pfl_pdf_blocks(page_text):
+
+    ordered_lines = split_pfl_panels(
+        page_text
+    )
+
+    if not ordered_lines:
+        return []
+
+    blocks = []
+
+    for line in ordered_lines:
+
+        blocks.append(
+            line
+        )
+
+    maximum = min(
+        20,
+        len(ordered_lines)
+    )
+
+    for size in range(
+        2,
+        maximum + 1
+    ):
+
+        for start in range(
+            len(ordered_lines) - size + 1
+        ):
+
+            block = " ".join(
+                ordered_lines[
+                    start:start + size
+                ]
+            )
+
+            if block:
 
                 blocks.append(
                     block
                 )
 
+    complete_sequence = " ".join(
+        ordered_lines
+    )
 
-    # -----------------------------------------------------
-    # Full page is deliberately NOT used as the primary
-    # comparison block.
-    #
-    # This prevents unrelated static/regional information
-    # from being mixed with variable data.
-    # -----------------------------------------------------
+    if complete_sequence:
 
-
-    # -----------------------------------------------------
-    # Remove duplicates
-    # -----------------------------------------------------
+        blocks.append(
+            complete_sequence
+        )
 
     unique = []
-
     seen = set()
 
     for block in blocks:
@@ -1027,15 +800,8 @@ def exact_match(
     if not actual_normalized:
         return False
 
-
-    # Normal match
-
     if expected_normalized in actual_normalized:
-
         return True
-
-
-    # Space-independent match
 
     expected_compact = compact_text(
         expected
@@ -1050,16 +816,10 @@ def exact_match(
         and
         expected_compact in actual_compact
     ):
-
         return True
-
 
     return False
 
-
-# =========================================================
-# EXPECTED VALUE SEARCH
-# =========================================================
 
 def search_exact_value(
     expected,
@@ -1085,10 +845,6 @@ def search_exact_value(
 
 # =========================================================
 # FIELD ANCHORS
-#
-# These help us locate the relevant variable value.
-# They prevent static information from being treated as
-# a mismatch.
 # =========================================================
 
 FIELD_ANCHORS = {
@@ -1164,7 +920,7 @@ FIELD_ANCHORS = {
 
 
 # =========================================================
-# CHECK IF BLOCK IS RELEVANT TO FIELD
+# RELEVANCE
 # =========================================================
 
 def is_relevant_block(
@@ -1181,16 +937,10 @@ def is_relevant_block(
     if not normalized_block:
         return False
 
-
-    # -----------------------------------------------------
-    # Field-specific anchors
-    # -----------------------------------------------------
-
     anchors = FIELD_ANCHORS.get(
         field_type,
         []
     )
-
 
     for anchor in anchors:
 
@@ -1203,21 +953,11 @@ def is_relevant_block(
             and
             anchor_norm in normalized_block
         ):
-
             return True
-
-
-    # -----------------------------------------------------
-    # Language-specific clues
-    #
-    # Only used when the selected field name explicitly
-    # indicates a language.
-    # -----------------------------------------------------
 
     region = get_field_region(
         field_name
     )
-
 
     if region == "EN":
 
@@ -1227,16 +967,16 @@ def is_relevant_block(
             "shell",
             "liner",
             "polyester",
-            "span dex",
             "bleach"
         ]
 
         for marker in english_markers:
 
-            if normalize_text(marker) in normalized_block:
+            if normalize_text(
+                marker
+            ) in normalized_block:
 
                 return True
-
 
     if region == "FR":
 
@@ -1246,16 +986,17 @@ def is_relevant_block(
             "extérieur",
             "doublure",
             "polyester",
-            "élasthanne",
+            "elasthanne",
             "sans chlore"
         ]
 
         for marker in french_markers:
 
-            if normalize_text(marker) in normalized_block:
+            if normalize_text(
+                marker
+            ) in normalized_block:
 
                 return True
-
 
     if region == "SP":
 
@@ -1273,10 +1014,11 @@ def is_relevant_block(
 
         for marker in spanish_markers:
 
-            if normalize_text(marker) in normalized_block:
+            if normalize_text(
+                marker
+            ) in normalized_block:
 
                 return True
-
 
     return False
 
@@ -1350,7 +1092,6 @@ def get_difference(
         if tag == "equal":
             continue
 
-
         expected_part = " ".join(
             expected_tokens[a1:a2]
         )
@@ -1359,13 +1100,11 @@ def get_difference(
             actual_tokens[b1:b2]
         )
 
-
         if tag == "replace":
 
             differences.append(
                 f"{expected_part} → {actual_part}"
             )
-
 
         elif tag == "delete":
 
@@ -1373,24 +1112,13 @@ def get_difference(
                 f"Missing: {expected_part}"
             )
 
-
         elif tag == "insert":
-
-            # IMPORTANT:
-            #
-            # Extra static PDF content should NOT become
-            # a failure automatically.
-            #
-            # Therefore inserted words are only shown when
-            # they occur inside a relevant candidate.
 
             differences.append(
                 f"Extra: {actual_part}"
             )
 
-
     if not differences:
-
         return "Content differs."
 
     return "; ".join(
@@ -1399,15 +1127,7 @@ def get_difference(
 
 
 # =========================================================
-# FIND PROBABLE VARIABLE MISMATCH
-#
-# This is the most important new function.
-#
-# We DO NOT compare the Order Form value against the
-# entire PDF.
-#
-# We only consider PDF blocks relevant to the selected
-# variable field.
+# PROBABLE MISMATCH
 # =========================================================
 
 def search_probable_mismatch(
@@ -1427,18 +1147,11 @@ def search_probable_mismatch(
     if not expected_tokens:
         return None
 
-
     field_type = get_field_type(
         field_name
     )
 
-
     candidates = []
-
-
-    # -----------------------------------------------------
-    # First: field-relevant blocks only
-    # -----------------------------------------------------
 
     for block in pdf_blocks:
 
@@ -1453,23 +1166,10 @@ def search_probable_mismatch(
                 block
             )
 
-
-    # -----------------------------------------------------
-    # If no relevant block exists:
-    #
-    # DO NOT start comparing against the entire PDF.
-    #
-    # This is what prevents static data from creating
-    # false failures.
-    # -----------------------------------------------------
-
     if not candidates:
-
         return None
 
-
     best = None
-
 
     for block in candidates:
 
@@ -1483,11 +1183,6 @@ def search_probable_mismatch(
 
         if not actual_tokens:
             continue
-
-
-        # -------------------------------------------------
-        # Similarity
-        # -------------------------------------------------
 
         ratio = fuzz.ratio(
             expected_normalized,
@@ -1509,11 +1204,6 @@ def search_probable_mismatch(
             block
         )
 
-
-        # -------------------------------------------------
-        # Score
-        # -------------------------------------------------
-
         score = (
             ratio * 0.35
             +
@@ -1524,26 +1214,11 @@ def search_probable_mismatch(
             overlap * 100 * 0.20
         )
 
-
-        # -------------------------------------------------
-        # Determine whether this is actually a useful
-        # mismatch candidate.
-        # -------------------------------------------------
-
         expected_word_count = len(
             expected_tokens
         )
 
-
         if field_type == "COO":
-
-            # COO is special.
-            #
-            # If the PDF has "MADE IN VIETNAM" while the
-            # Order Form says "MADE IN CHINA", this should
-            # be a mismatch.
-            #
-            # "MADE IN" gives us the strong contextual anchor.
 
             expected_has_made_in = (
                 "made in"
@@ -1557,14 +1232,11 @@ def search_probable_mismatch(
                 actual_normalized
             )
 
-
             if (
                 expected_has_made_in
                 and
                 actual_has_made_in
             ):
-
-                # Extract everything after "made in"
 
                 expected_country = re.sub(
                     r"^.*?made in\s+",
@@ -1578,9 +1250,6 @@ def search_probable_mismatch(
                     actual_normalized
                 ).strip()
 
-
-                # Country comparison
-
                 if (
                     expected_country
                     and
@@ -1592,10 +1261,7 @@ def search_probable_mismatch(
                         actual_country
                     )
 
-
-                    if (
-                        country_similarity < 95
-                    ):
+                    if country_similarity < 95:
 
                         return {
                             "status": "FAIL",
@@ -1606,11 +1272,6 @@ def search_probable_mismatch(
                             ),
                             "score": 100
                         }
-
-
-        # -------------------------------------------------
-        # General mismatch rules
-        # -------------------------------------------------
 
         if expected_word_count <= 2:
 
@@ -1636,14 +1297,8 @@ def search_probable_mismatch(
                 overlap >= 0.30
             )
 
-
         if not acceptable:
             continue
-
-
-        # -------------------------------------------------
-        # Keep best candidate
-        # -------------------------------------------------
 
         if (
             best is None
@@ -1661,12 +1316,11 @@ def search_probable_mismatch(
                 "score": score
             }
 
-
     return best
 
 
 # =========================================================
-# CHECK ONE VARIABLE FIELD
+# CHECK FIELD
 # =========================================================
 
 def check_field(
@@ -1674,15 +1328,6 @@ def check_field(
     pdf_blocks,
     field_name
 ):
-
-    # -----------------------------------------------------
-    # Blank Order Form value
-    #
-    # IMPORTANT:
-    #
-    # If the variable field has no value in the Order Form,
-    # it is NOT required.
-    # -----------------------------------------------------
 
     if (
         expected is None
@@ -1693,18 +1338,13 @@ def check_field(
         return {
             "status": "SKIP",
             "pdf": "—",
-            "difference": "No variable data in Order Form."
+            "difference":
+                "No variable data in Order Form."
         }
-
 
     expected = str(
         expected
     ).strip()
-
-
-    # -----------------------------------------------------
-    # 1. EXACT VARIABLE VALUE
-    # -----------------------------------------------------
 
     exact = search_exact_value(
         expected,
@@ -1712,24 +1352,7 @@ def check_field(
     )
 
     if exact:
-
         return exact
-
-
-    # -----------------------------------------------------
-    # 2. SEARCH FOR A RELEVANT DIFFERENT VALUE
-    #
-    # Example:
-    #
-    # Order Form:
-    # MADE IN CHINA
-    #
-    # PDF:
-    # MADE IN VIETNAM
-    #
-    # Result:
-    # FAIL
-    # -----------------------------------------------------
 
     probable = search_probable_mismatch(
         expected,
@@ -1738,109 +1361,18 @@ def check_field(
     )
 
     if probable:
-
         return probable
-
-
-    # -----------------------------------------------------
-    # 3. NOT FOUND
-    #
-    # This means:
-    #
-    # - The expected variable value is absent
-    # - AND we did not find a sufficiently relevant
-    #   alternative variable value
-    #
-    # We do NOT call unrelated static PDF information
-    # a FAIL.
-    # -----------------------------------------------------
 
     return {
         "status": "NOT FOUND",
         "pdf": "Not found in relevant PDF area",
-        "difference": "Selected variable value was not detected."
+        "difference":
+            "Selected variable value was not detected."
     }
 
 
 # =========================================================
-# PFL PANEL SUPPORT
-# =========================================================
-
-def get_pfl_panel_blocks(page_text):
-    """
-    PFL mode treats panel-numbered artwork as a continuous stream.
-    Panel labels such as 1, 2, 3 or PANEL 1 / PANEL 2 are removed
-    from the comparison content. The extracted lines are then grouped
-    into larger blocks so text split at a panel boundary can be found.
-    """
-    if not page_text:
-        return []
-
-    raw_lines = page_text.splitlines()
-    cleaned = []
-
-    panel_pattern = re.compile(
-        r"^\s*(?:panel\s*)?(\d{1,3})\s*$",
-        re.IGNORECASE
-    )
-
-    for raw in raw_lines:
-        line = clean_pdf_line(raw)
-        if not line:
-            continue
-        if len(line) > 1500:
-            continue
-
-        # Ignore standalone panel sequence numbers.
-        if panel_pattern.match(line):
-            continue
-
-        # Ignore common textual panel labels.
-        if re.match(r"^\s*panel\s*[-#:]?\s*\d{1,3}\s*$", line, re.IGNORECASE):
-            continue
-
-        cleaned.append(line)
-
-    if not cleaned:
-        return []
-
-    blocks = list(cleaned)
-
-    # Larger windows are the important part for PFL because a value
-    # may begin near the end of one panel and continue into the next.
-    maximum = min(24, len(cleaned))
-
-    for size in range(2, maximum + 1):
-        for start in range(len(cleaned) - size + 1):
-            block = " ".join(cleaned[start:start + size])
-            if block:
-                blocks.append(block)
-
-    unique = []
-    seen = set()
-
-    for block in blocks:
-        normalized = normalize_text(block)
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        unique.append(block)
-
-    return unique
-
-
-def get_comparison_blocks(page_text, product_type):
-    if product_type == "PFL":
-        return get_pfl_panel_blocks(page_text)
-    return create_pdf_blocks(page_text)
-
-
-# =========================================================
-# BUILD REPORT
-#
-# PAGE 1 → EXCEL ROW 2
-# PAGE 2 → EXCEL ROW 3
-# PAGE 3 → EXCEL ROW 4
+# REPORT
 # =========================================================
 
 def build_report(
@@ -1854,25 +1386,11 @@ def build_report(
 
     field_no = 1
 
-
-    # -----------------------------------------------------
-    # Process PDF pages.
-    #
-    # PDF page index 0 = Excel row 2
-    # PDF page index 1 = Excel row 3
-    # etc.
-    # -----------------------------------------------------
-
     for page_index, page in enumerate(
         pdf_pages
     ):
 
         excel_index = page_index
-
-
-        # -------------------------------------------------
-        # No corresponding Excel row
-        # -------------------------------------------------
 
         if excel_index >= len(df):
 
@@ -1885,9 +1403,11 @@ def build_report(
                         "EXCEL ROW": "N/A",
                         "FIELD": field,
                         "ORDER FORM DATA": "No Excel row",
-                        "PDF OUTPUT": "No corresponding Order Form row",
+                        "PDF OUTPUT":
+                            "No corresponding Order Form row",
                         "STATUS": "NOT FOUND",
-                        "DIFFERENCE": "No corresponding Excel row."
+                        "DIFFERENCE":
+                            "No corresponding Excel row."
                     }
                 )
 
@@ -1895,34 +1415,25 @@ def build_report(
 
             continue
 
-
-        # -------------------------------------------------
-        # Get corresponding Excel row
-        # -------------------------------------------------
-
         row = df.iloc[
             excel_index
         ]
 
+        if product_type == "PFL":
 
-        # -------------------------------------------------
-        # Extract smart PDF blocks
-        # -------------------------------------------------
+            pdf_blocks = create_pfl_pdf_blocks(
+                page["text"]
+            )
 
-        pdf_blocks = get_comparison_blocks(
-            page["text"],
-            product_type
-        )
+        else:
 
-
-        # -------------------------------------------------
-        # Compare ONLY user-selected fields
-        # -------------------------------------------------
+            pdf_blocks = create_pdf_blocks(
+                page["text"]
+            )
 
         for field in selected_fields:
 
             value = row[field]
-
 
             if pd.isna(value):
 
@@ -1934,23 +1445,21 @@ def build_report(
                     value
                 ).strip()
 
-
-            # -------------------------------------------------
-            # Blank variable field = NOT REQUIRED
-            # -------------------------------------------------
-
             if not value:
 
                 results.append(
                     {
                         "FIELD NO": field_no,
                         "PDF PAGE": page["page"],
-                        "EXCEL ROW": excel_index + 2,
+                        "EXCEL ROW":
+                            excel_index + 2,
                         "FIELD": field,
                         "ORDER FORM DATA": "",
                         "PDF OUTPUT": "—",
                         "STATUS": "SKIP",
-                        "DIFFERENCE": "Blank Order Form value — PDF content ignored."
+                        "DIFFERENCE":
+                            "Blank Order Form value — "
+                            "PDF content ignored."
                     }
                 )
 
@@ -1958,33 +1467,28 @@ def build_report(
 
                 continue
 
-
-            # -------------------------------------------------
-            # Compare variable field
-            # -------------------------------------------------
-
             result = check_field(
                 value,
                 pdf_blocks,
                 field
             )
 
-
             results.append(
                 {
                     "FIELD NO": field_no,
                     "PDF PAGE": page["page"],
-                    "EXCEL ROW": excel_index + 2,
+                    "EXCEL ROW":
+                        excel_index + 2,
                     "FIELD": field,
                     "ORDER FORM DATA": value,
                     "PDF OUTPUT": result["pdf"],
                     "STATUS": result["status"],
-                    "DIFFERENCE": result["difference"]
+                    "DIFFERENCE":
+                        result["difference"]
                 }
             )
 
             field_no += 1
-
 
     return pd.DataFrame(
         results
@@ -1992,7 +1496,7 @@ def build_report(
 
 
 # =========================================================
-# STATUS COLORS
+# STATUS STYLING
 # =========================================================
 
 def style_status(value):
@@ -2000,155 +1504,301 @@ def style_status(value):
     if value == "PASS":
 
         return (
-            "background-color: #238636;"
-            "color: white;"
-            "font-weight: bold;"
+            "background-color:#238636;"
+            "color:white;"
+            "font-weight:bold;"
         )
-
 
     if value == "FAIL":
 
         return (
-            "background-color: #da3633;"
-            "color: white;"
-            "font-weight: bold;"
+            "background-color:#da3633;"
+            "color:white;"
+            "font-weight:bold;"
         )
-
 
     if value == "NOT FOUND":
 
         return (
-            "background-color: #9e6a03;"
-            "color: white;"
-            "font-weight: bold;"
+            "background-color:#9e6a03;"
+            "color:white;"
+            "font-weight:bold;"
         )
-
 
     if value == "SKIP":
 
         return (
-            "background-color: #555555;"
-            "color: white;"
-            "font-weight: bold;"
+            "background-color:#555555;"
+            "color:white;"
+            "font-weight:bold;"
         )
-
 
     return ""
 
 
 # =========================================================
-# UPLOAD AREA
+# MAIN
 # =========================================================
 
-left_column, right_column = st.columns(
-    2
-)
+def main():
 
+    render_title()
 
-# =========================================================
-# ORDER FORM
-# =========================================================
+    # ======================================================
+    # NEW START
+    # ======================================================
 
-with left_column:
+    top_left, top_right = st.columns(
+        [7, 1]
+    )
+
+    with top_right:
+
+        if st.button(
+            "↻ NEW START",
+            key="of_new_start",
+            width="stretch"
+        ):
+
+            st.session_state[
+                "of_product_type"
+            ] = "Other"
+
+            st.session_state[
+                "of_selected_fields"
+            ] = []
+
+            st.session_state[
+                "of_result"
+            ] = None
+
+            st.rerun()
+
+    # ======================================================
+    # PRODUCT TYPE
+    # ======================================================
 
     st.markdown(
-        '<div class="section-title">📊 Order Form</div>',
-        unsafe_allow_html=True
-    )
-
-    excel_file = st.file_uploader(
-        "Upload Excel Order Form",
-        type=[
-            "xlsx",
-            "xls"
-        ],
-        key=f"excel_upload_{st.session_state['reset_id']}"
-    )
-
-
-# =========================================================
-# PDF
-# =========================================================
-
-with right_column:
-
-    st.markdown(
-        '<div class="section-title">📄 PDF Output</div>',
-        unsafe_allow_html=True
-    )
-
-    pdf_file = st.file_uploader(
-        "Upload PDF Artwork",
-        type=[
-            "pdf"
-        ],
-        key=f"pdf_upload_{st.session_state['reset_id']}"
-    )
-
-
-# =========================================================
-# LOAD EXCEL
-# =========================================================
-
-df = None
-
-if excel_file:
-
-    try:
-
-        df = load_excel(
-            excel_file
-        )
-
-    except Exception as error:
-
-        st.error(
-            f"Unable to read the Excel Order Form: {error}"
-        )
-
-        st.stop()
-
-
-    # =====================================================
-    # FIELD SELECTION
-    # =====================================================
-
-    st.markdown(
-        '<div class="section-title">'
-        'Select Variable Fields to Validate'
+        '<div class="tool-section-title">'
+        '🏷️ Product Type'
         '</div>',
         unsafe_allow_html=True
     )
 
-    st.caption(
-        "Only the fields selected below are treated as "
-        "variable artwork data. Other PDF content is ignored."
+    product_types = [
+        "Other",
+        "HTL",
+        "PFL"
+    ]
+
+    current_type = st.session_state.get(
+        "of_product_type",
+        "Other"
     )
 
+    if current_type not in product_types:
+        current_type = "Other"
 
-    selected_fields = st.multiselect(
-        "Select the fields from your Order Form",
-        options=[
+    product_type = st.selectbox(
+        "Product Type",
+        product_types,
+        index=product_types.index(
+            current_type
+        ),
+        key="of_product_type"
+    )
+
+    if product_type == "PFL":
+
+        st.info(
+            "PFL mode enabled — panel sequence and "
+            "cross-panel continuation logic will be used."
+        )
+
+    else:
+
+        st.caption(
+            "Standard comparison mode."
+        )
+
+    # ======================================================
+    # FILE UPLOADS
+    # ======================================================
+
+    st.markdown(
+        '<div class="tool-section-title">'
+        '📂 Upload Files'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    col1, col2 = st.columns(
+        2
+    )
+
+    with col1:
+
+        excel_file = st.file_uploader(
+            "📊 Order Form Excel",
+            type=[
+                "xlsx",
+                "xls"
+            ],
+            key="of_excel_upload"
+        )
+
+    with col2:
+
+        pdf_file = st.file_uploader(
+            "📄 Output Artwork PDF",
+            type=[
+                "pdf"
+            ],
+            key="of_pdf_upload"
+        )
+
+    # ======================================================
+    # READ EXCEL
+    # ======================================================
+
+    df = None
+
+    if excel_file:
+
+        try:
+
+            df = load_excel(
+                excel_file
+            )
+
+        except Exception as error:
+
+            st.error(
+                f"Unable to read the Excel Order Form: {error}"
+            )
+
+            return
+
+        if df.empty:
+
+            st.error(
+                "The uploaded Excel does not contain usable data."
+            )
+
+            return
+
+        # ==================================================
+        # EXCEL INFORMATION
+        # ==================================================
+
+        st.markdown(
+            '<div class="tool-section-title">'
+            '📌 Order Form Fields'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+        st.caption(
+            "Select ONLY the Excel fields that should be "
+            "validated against the PDF. Nothing is selected "
+            "automatically."
+        )
+
+        excel_columns = [
             str(column)
             for column in df.columns
-        ],
-        default=[],
-        label_visibility="collapsed"
-    )
+        ]
 
+        selected_fields = st.multiselect(
+            "Select fields to validate",
+            options=excel_columns,
+            default=st.session_state.get(
+                "of_selected_fields",
+                []
+            ),
+            key="of_selected_fields"
+        )
 
-else:
+        if selected_fields:
 
-    selected_fields = []
+            preview_rows = []
 
+            for field in selected_fields:
 
-# =========================================================
-# LOAD PDF
-# =========================================================
+                values = []
 
-pdf_pages = None
+                for value in df[field].tolist():
 
-if pdf_file:
+                    if pd.isna(value):
+                        continue
+
+                    value = str(
+                        value
+                    ).strip()
+
+                    if value:
+                        values.append(
+                            value
+                        )
+
+                preview_rows.append(
+                    {
+                        "Excel Field": field,
+                        "Values": len(values),
+                        "Preview":
+                            " | ".join(
+                                values[:3]
+                            )
+                    }
+                )
+
+            preview_df = pd.DataFrame(
+                preview_rows
+            )
+
+            with st.expander(
+                "🔎 Preview Selected Fields"
+            ):
+
+                st.dataframe(
+                    preview_df,
+                    width="stretch",
+                    hide_index=True
+                )
+
+        else:
+
+            st.info(
+                "Select at least one Excel field to continue."
+            )
+
+    else:
+
+        selected_fields = []
+
+    # ======================================================
+    # REQUIRE BOTH FILES
+    # ======================================================
+
+    if not excel_file:
+
+        return
+
+    if not pdf_file:
+
+        st.info(
+            "Upload the Output Artwork PDF to continue."
+        )
+
+        return
+
+    if not selected_fields:
+
+        return
+
+    # ======================================================
+    # READ PDF
+    # ======================================================
 
     try:
 
@@ -2159,44 +1809,40 @@ if pdf_file:
     except Exception as error:
 
         st.error(
-            f"Unable to read the PDF file: {error}"
+            f"Unable to read the PDF: {error}"
         )
 
-        st.stop()
+        return
 
+    if not pdf_pages:
 
-# =========================================================
-# FILE INFORMATION
-# =========================================================
+        st.error(
+            "No pages could be read from the PDF."
+        )
 
-if (
-    excel_file
-    and
-    pdf_file
-):
+        return
 
-    st.divider()
+    # ======================================================
+    # FILE INFORMATION
+    # ======================================================
 
     st.markdown(
-        '<div class="section-title">'
-        '📌 File Information'
+        '<div class="tool-section-title">'
+        '📌 Validation Setup'
         '</div>',
         unsafe_allow_html=True
     )
-
 
     info1, info2, info3 = st.columns(
         3
     )
 
-
     with info1:
 
         st.metric(
-            "Excel Data Rows",
+            "Excel Rows",
             len(df)
         )
-
 
     with info2:
 
@@ -2205,191 +1851,317 @@ if (
             len(pdf_pages)
         )
 
-
     with info3:
 
-        difference = (
-            len(df)
-            -
-            len(pdf_pages)
-        )
-
         st.metric(
-            "Row / Page Difference",
-            difference
+            "Selected Fields",
+            len(selected_fields)
         )
 
+    if len(df) != len(pdf_pages):
 
-    if len(df) == len(pdf_pages):
-
-        st.success(
-            "✅ Excel rows and PDF pages match."
+        st.warning(
+            "Excel row count and PDF page count do not match. "
+            "The existing mapping will still be used: "
+            "PDF Page 1 → Excel Row 2, PDF Page 2 → Excel Row 3, "
+            "and so on."
         )
 
     else:
 
-        st.warning(
-            "⚠️ Excel rows and PDF pages do not have the "
-            "same count. Matching will use Page 1 → Excel "
-            "Row 2, Page 2 → Excel Row 3, etc."
+        st.success(
+            "Excel row count and PDF page count match."
         )
 
+    # ======================================================
+    # COMPARE
+    # ======================================================
 
-# =========================================================
-# COMPARE BUTTON
-# =========================================================
+    st.markdown(
+        '<div class="tool-section-title">'
+        '🚀 Run Validation'
+        '</div>',
+        unsafe_allow_html=True
+    )
 
-if (
-    excel_file
-    and
-    pdf_file
-    and
-    selected_fields
-    and
-    product_type != "----- SELECT -----"
-):
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    if st.button(
+    compare_clicked = st.button(
         "🔍  COMPARE & PROOFREAD",
-        use_container_width=True,
-        key="compare_button"
+        key="of_compare",
+        type="primary",
+        width="stretch"
+    )
+
+    if not compare_clicked:
+
+        return
+
+    # ======================================================
+    # RUN
+    # ======================================================
+
+    with st.spinner(
+        "Checking selected variable artwork data..."
     ):
 
-        with st.spinner(
-            "Checking selected variable artwork data..."
-        ):
+        report = build_report(
+            df,
+            pdf_pages,
+            selected_fields,
+            product_type
+        )
 
-            st.session_state["report"] = build_report(
-                df,
-                pdf_pages,
-                selected_fields,
-                product_type
-            )
+    st.session_state[
+        "of_result"
+    ] = report
 
-            st.session_state["report_product_type"] = product_type
-
-
-# =========================================================
-# SAVED REPORT
-#
-# Stored in session state so the report remains visible after
-# normal Streamlit reruns until NEW START is selected.
-# =========================================================
-
-report = st.session_state.get("report")
-
-if report is not None:
+    # ======================================================
+    # REPORT
+    # ======================================================
 
     st.divider()
 
     st.markdown(
-        '<div class="section-title">QC Report</div>',
+        '<div class="tool-section-title">'
+        '📋 QC Report'
+        '</div>',
         unsafe_allow_html=True
     )
 
-    report_product_type = st.session_state.get(
-        "report_product_type",
-        product_type
-    )
+    if report.empty:
 
-    st.caption(
-        f"Comparison mode: {report_product_type}"
-    )
+        st.warning(
+            "No validation results were generated."
+        )
 
-    # =================================================
-    # COUNTS
-    # =================================================
+        return
 
     pass_count = int(
-        (report["STATUS"] == "PASS").sum()
+        (
+            report["STATUS"] == "PASS"
+        ).sum()
     )
 
     fail_count = int(
-        (report["STATUS"] == "FAIL").sum()
+        (
+            report["STATUS"] == "FAIL"
+        ).sum()
     )
 
     not_found_count = int(
-        (report["STATUS"] == "NOT FOUND").sum()
+        (
+            report["STATUS"] == "NOT FOUND"
+        ).sum()
     )
 
     skip_count = int(
-        (report["STATUS"] == "SKIP").sum()
+        (
+            report["STATUS"] == "SKIP"
+        ).sum()
     )
 
-    col1, col2, col3, col4 = st.columns(4)
+    # ======================================================
+    # SUMMARY
+    # ======================================================
 
-    with col1:
-        st.metric("PASS", pass_count)
+    c1, c2, c3, c4 = st.columns(
+        4
+    )
 
-    with col2:
-        st.metric("FAIL", fail_count)
+    with c1:
 
-    with col3:
-        st.metric("NOT FOUND", not_found_count)
+        st.metric(
+            "PASS",
+            pass_count
+        )
 
-    with col4:
-        st.metric("IGNORED", skip_count)
+    with c2:
 
-    # =================================================
-    # REPORT TABLE
-    # =================================================
+        st.metric(
+            "FAIL",
+            fail_count
+        )
+
+    with c3:
+
+        st.metric(
+            "NOT FOUND",
+            not_found_count
+        )
+
+    with c4:
+
+        st.metric(
+            "IGNORED",
+            skip_count
+        )
+
+    # ======================================================
+    # TABLE
+    # ======================================================
 
     styled_report = (
         report
         .style
         .map(
             style_status,
-            subset=["STATUS"]
+            subset=[
+                "STATUS"
+            ]
         )
     )
 
     st.dataframe(
         styled_report,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
-    # =================================================
+    # ======================================================
     # CONCLUSION
-    # =================================================
+    # ======================================================
 
     st.divider()
 
     if fail_count > 0:
+
         st.error(
-            f"❌ FAIL — {fail_count} variable-data mismatch(es) detected."
+            f"❌ FAIL — {fail_count} variable-data "
+            f"mismatch(es) detected."
         )
 
     elif not_found_count > 0:
+
         st.warning(
-            f"⚠️ REVIEW — {not_found_count} selected variable "
-            f"field(s) could not be located."
+            f"⚠️ REVIEW — {not_found_count} selected "
+            f"variable field(s) could not be located."
         )
 
     else:
+
         st.success(
-            "✅ PASS — All selected variable fields matched the PDF artwork."
+            "✅ PASS — All selected variable fields "
+            "matched the PDF artwork."
         )
 
-    # =================================================
-    # LOGIC EXPLANATION
-    # =================================================
+    # ======================================================
+    # DIFFERENCE DETAILS
+    # ======================================================
 
-    with st.expander("ℹ️ How this validation works"):
+    failures = report[
+        report["STATUS"].isin(
+            [
+                "FAIL",
+                "NOT FOUND"
+            ]
+        )
+    ]
+
+    if not failures.empty:
+
+        st.markdown(
+            "### 🔎 Difference Details"
+        )
+
+        for _, result in failures.iterrows():
+
+            field_name = result[
+                "FIELD"
+            ]
+
+            status = result[
+                "STATUS"
+            ]
+
+            if status == "FAIL":
+
+                title = (
+                    f"❌ {field_name} "
+                    f"— Page {result['PDF PAGE']}"
+                )
+
+            else:
+
+                title = (
+                    f"⚠️ {field_name} "
+                    f"— Page {result['PDF PAGE']}"
+                )
+
+            with st.expander(
+                title
+            ):
+
+                left, right = st.columns(
+                    2
+                )
+
+                with left:
+
+                    st.markdown(
+                        "**Order Form Data**"
+                    )
+
+                    st.code(
+                        str(
+                            result[
+                                "ORDER FORM DATA"
+                            ]
+                        )
+                    )
+
+                with right:
+
+                    st.markdown(
+                        "**PDF Output**"
+                    )
+
+                    st.code(
+                        str(
+                            result[
+                                "PDF OUTPUT"
+                            ]
+                        )
+                    )
+
+                st.markdown(
+                    "**Difference**"
+                )
+
+                difference = str(
+                    result[
+                        "DIFFERENCE"
+                    ]
+                )
+
+                if (
+                    "→" in difference
+                ):
+
+                    st.error(
+                        difference
+                    )
+
+                else:
+
+                    st.warning(
+                        difference
+                    )
+
+    # ======================================================
+    # LOGIC EXPLANATION
+    # ======================================================
+
+    with st.expander(
+        "ℹ️ How validation works"
+    ):
+
         st.write(
             """
             **Variable-data validation**
 
-            Only the fields selected from the Order Form are treated as
-            variable artwork data.
-
-            **Static PDF content is ignored.**
-
-            PDF bullets/keystrokes such as `n`, regional prefixes,
-            addresses, phone numbers and other unselected static artwork
-            content do not create failures.
+            Only fields selected from the Order Form are
+            treated as variable artwork data. Unselected
+            static artwork text is not used to generate
+            mismatches.
 
             **Page mapping**
 
@@ -2401,71 +2173,59 @@ if report is not None:
 
             and so on.
 
-            **PFL mode**
+            **Blank fields**
 
-            Panel-numbered artwork is treated as a continuous stream so
-            selected variable data can continue from one panel into the
-            next panel.
+            If the selected Order Form field is blank,
+            that field is ignored.
 
-            **Mismatch detection**
+            **PFL**
 
-            If the selected Order Form value is present in the PDF → PASS.
+            PFL mode detects panel numbering when possible
+            and allows variable data to continue across
+            panel boundaries.
 
-            If the expected value is absent but a relevant alternative
-            value is detected → FAIL.
+            **Difference detection**
 
-            If an Order Form field is blank, that field is not required
-            and is ignored.
+            When an expected value is found exactly,
+            the result is PASS.
+
+            When a relevant alternative value is found,
+            the result is FAIL and the report shows the
+            difference.
+
+            Example:
+
+            Order Form:
+            MADE IN CHINA
+
+            PDF:
+            MADE IN VIETNAM
+
+            Difference:
+            CHINA → VIETNAM
             """
         )
 
-    # =================================================
+    # ======================================================
     # DOWNLOAD REPORT
-    # =================================================
+    # ======================================================
 
     csv_data = (
         report
-        .to_csv(index=False)
-        .encode("utf-8-sig")
+        .to_csv(
+            index=False
+        )
+        .encode(
+            "utf-8-sig"
+        )
     )
 
     st.download_button(
         label="⬇️ Download QC Report",
         data=csv_data,
-        file_name="PDF_Proofreading_QC_Report.csv",
+        file_name=(
+            "Order_Form_Output_QC_Report.csv"
+        ),
         mime="text/csv",
-        use_container_width=True,
-        key="download_qc_report"
-    )
-
-
-# =========================================================
-# INITIAL INSTRUCTIONS
-# =========================================================
-
-if not excel_file:
-
-    st.caption(
-        "Upload an Order Form to begin."
-    )
-
-
-elif not pdf_file:
-
-    st.caption(
-        "Upload the PDF artwork to continue."
-    )
-
-
-elif product_type == "----- SELECT -----":
-
-    st.caption(
-        "Select the Product Type to continue."
-    )
-
-
-elif not selected_fields:
-
-    st.caption(
-        "Select the variable fields you want to validate."
+        width="stretch"
     )
